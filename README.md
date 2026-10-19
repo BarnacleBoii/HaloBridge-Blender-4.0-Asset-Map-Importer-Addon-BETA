@@ -1,6 +1,6 @@
 # HaloBridge — Blender 4.0 Asset / Map Importer (Beta)
-
-Bring MCC Halo 3 environment assets into Blender, build your own map, and prepare its current geometry for testing in Halo 3 Sapien.
+(Coded with Chat GPT 6 Astra, guided by user input)
+Quickly Import HaloMCC fully textured game assets and entire .maps into Blender, and prepare its current geometry for testing in Halo 3 Sapien. Currently Halo 3,Halo Reach have been added. Right now I plan on adding Halo 1,2,ODST,4
 
 **v0.8.4 · Beta preview · Windows x64 · Blender 4.0**
 
@@ -12,18 +12,16 @@ Download **HaloBridge-0.8.4.zip** from the release assets. GitHub's automatic **
 
 Use **Import game**, above **Folders and Setup**, to select **Halo 3** or **Halo: Reach**. Each game remembers its folders, map filename, storage and catalogue. Save the blend file to retain these settings. Switching does not delete scene objects. Reach assets can share a scene with Halo 3 assets. Switch **Import game** back to **Halo 3**, verify H3EK, then use **Prepare current scene for sapien**. Reach meshes are converted to static Halo 3 geometry with generated collision and converted preview textures. Existing Reach objects do not need reimporting. See [Reach conversion](docs/REACH.md).
 
-**Origin to Geometry - all scene meshes** uses Blender's native median geometry center on every mesh, including authored, hidden and previously centered objects, preserving visible geometry and selection. Use Object Mode; Blender Undo is available. Linked library meshes must be made local first.
-
 See [Reach setup and limitations](docs/REACH.md).
 
 ## What you can do
 
-- Search and filter assets by source map and category.
-- Preview an asset at the 3D cursor, adjust its transform, then place it.
-- Place multiple assets and reuse cached meshes and textures.
-- Import a map's available terrain and static objects at their original positions.
+- Import fully textured static objects or entire campaign/multiplayer maps with their original position/material data.
+- 3D Preview map assets in the asset list by just clicking on the name to show geometry at 3d cursor
+- Search and filter certain assets by map and category.
+- Place and edit multiple assets geometry, materials, textures.
 - Edit, move, duplicate, or delete geometry in Blender and export that current scene.
-- Choose a sky from installed Editing Kit maps, generate surface collision and optional draft lighting, then open the result in Sapien.
+- (Experimental)Choose a sky from installed Editing Kit maps, generate surface collision and optional draft lighting, then open the result in Sapien.
 
 ## Requirements at a glance
 
