@@ -1,0 +1,106 @@
+using System.Numerics;
+using System.Text.Json;
+using Reclaimer.Blam.Common;
+using Reclaimer.Blam.Halo3;
+using Reclaimer.Geometry;
+using Reclaimer.Utilities;
+
+// Geometry stays in Halo world units. RMF is retained as the interchange master;
+// a small JSON preview avoids requiring the RMF importer's Qt UI inside Blender.
+class Program {
+ static JsonSerializerOptions json = new() { WriteIndented = false };
+ static void Save(string path, object value) { Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);File.WriteAllText(path,JsonSerializer.Serialize(value,json)); }
+ static float[] V(Vector3 v)=>new[]{v.X,v.Y,v.Z};
+ static int Main(string[] args) {
+  try {
+   var job=JsonDocument.Parse(File.ReadAllText(args[0])).RootElement;
+   if(job.GetProperty("version").GetInt32()!=1) throw new Exception("Unsupported job version");
+   var map=job.GetProperty("map").GetString()!; var output=job.GetProperty("output").GetString()!;
+   var cache=CacheFactory.ReadCacheFile(map);
+   bool reach=cache.Metadata.Engine==BlamEngine.HaloReach;
+   if((cache.Metadata.Engine!=BlamEngine.Halo3 && !reach) || !cache.Metadata.IsMcc) throw new Exception("Select an MCC PC Halo 3 or Halo: Reach map.");
+   if(job.TryGetProperty("game",out var requested) && requested.GetString()!=(reach?"reach":"halo3")) throw new Exception("The map belongs to a different game. Change the Halo game selector or maps folder.");
+   var op=job.GetProperty("operation").GetString();
+   if(new[]{"extract","material","map_scene"}.Contains(op))Save(Path.Combine(output,"texture_names.json"),new{version=1,textures=cache.TagIndex.Where(t=>t.ClassCode=="bitm").ToDictionary(t=>t.Id.ToString(),t=>t.TagName)});
+   if(op=="texture_names") {
+    Save(output,new{version=1,textures=cache.TagIndex.Where(t=>t.ClassCode=="bitm").ToDictionary(t=>t.Id.ToString(),t=>t.TagName)});
+   } else if(op=="scenario_info") {
+    Save(output,new{version=1,scenario=cache.TagIndex.GetGlobalTag("scnr").TagName});
+   } else if(op=="index") {
+    if(reach){ReachSupport.Index(cache,map,output);return 0;}
+    var assets=new List<object>();
+    foreach(var tag in cache.TagIndex) {
+     if(new[]{"rmsh","rmtr","rmfl","rmhg","rmw ","rmcs"}.Contains(tag.ClassCode)) assets.Add(new {tag=tag.TagName,kind="material",name=Path.GetFileName(tag.TagName),section=-1});
+     if(tag.ClassCode=="scen") {
+      try { var scenery=tag.ReadMetadata<SceneryTag>();var render=scenery.ReadRenderModel();
+       assets.Add(new {tag=scenery.Model.Tag.ReadMetadata<ModelTag>().RenderModel.Tag.TagName,scenery_tag=tag.TagName,kind="scenery",name=Path.GetFileName(tag.TagName),section=-1});
+      }catch(Exception e){Console.Error.WriteLine("Skipping scenery "+tag.TagName+": "+e.Message);}
+     }
+     if(tag.ClassCode=="mode") assets.Add(new { tag=tag.TagName, kind="model", name=Path.GetFileName(tag.TagName), section=-1 });
+     if(tag.ClassCode=="sbsp") {
+      var bsp=tag.ReadMetadata<ScenarioStructureBspTag>();
+      foreach(var group in bsp.GeometryInstances.GroupBy(i=>i.SectionIndex)) {
+       var instance=group.First(); assets.Add(new {tag=tag.TagName,kind="instance",name=instance.Name.ToString(),section=(int)instance.SectionIndex});
+      }
+     }
+    }
+    Save(output,new {version=1,map,assets});
+   } else if(op=="bsp_diagnostics") {
+    var tag=cache.TagIndex.First(t=>t.TagName==job.GetProperty("tag").GetString() && t.ClassCode=="sbsp");
+    var bsp=tag.ReadMetadata<ScenarioStructureBspTag>();
+    var details=new Dictionary<string,object?> { ["tag"]=tag.TagName,["clusters"]=bsp.Clusters.Count,["instances"]=bsp.GeometryInstances.Count,["sections"]=bsp.Sections.Count };
+    try {var model=((IContentProvider<Model>)bsp).GetContent();details["meshes"]=model.Meshes.Count;details["placements"]=MapScene.Probe(model,Path.Combine(Path.GetDirectoryName(Path.GetFullPath(output))!,tag.FileName+"_preview"));details["ok"]=true;}
+    catch(Exception e){details["ok"]=false;details["error"]=e.ToString();}
+    Save(output,details);
+   } else if(op=="map_scene") {
+    if(reach)ReachMapScene.Export(cache,output);else MapScene.Export(cache,output);
+   } else if(op=="material") {
+    if(reach){ReachSupport.Material(cache,job.GetProperty("tag").GetString()!,output);return 0;}
+    var tag=cache.TagIndex.First(t=>t.TagName==job.GetProperty("tag").GetString() && t.ClassCode.StartsWith("rm"));
+    var method=typeof(ShaderBlock).Assembly.GetType("Reclaimer.Blam.Halo3.Halo3Common")!.GetMethod("GetMaterials")!;
+    var materials=(IEnumerable<Material>)method.Invoke(null,new object[]{new[]{new ShaderBlock{ShaderReference=new TagReference(cache,tag.ClassId,tag.Id)}}})!;
+    Save(Path.Combine(output,"preview.json"),new{version=1,materials=WriteMaterials(materials,output),meshes=Array.Empty<object>()});
+   } else if(op=="extract") {
+    var tagPath=job.GetProperty("tag").GetString();int section=job.GetProperty("section").GetInt32();
+    var tag=cache.TagIndex.First(t=>t.TagName==tagPath && t.ClassCode==(section>=0?"sbsp":"mode"));
+    if(!ContentFactory.TryGetGeometryContent(tag,out var provider))throw new Exception("Reclaimer cannot decode this geometry.");
+    var scene=provider.GetContent(); var model=scene.EnumerateModels().First();
+    if(section>=0) {
+     foreach(var region in model.Regions) foreach(var p in region.Permutations) p.Export=false;
+     var perm=model.Regions.SelectMany(r=>r.Permutations).First(p=>p.MeshIndices.Contains(section));
+     perm.Export=true;perm.Transform=Matrix4x4.Identity;perm.Scale=Vector3.One;
+    }
+    Directory.CreateDirectory(output);scene.WriteRMF(Path.Combine(output,"asset.rmf"));
+    var used=section>=0?new[]{section}:model.Regions.Where(r=>r.Export).SelectMany(r=>r.Permutations.Where(p=>p.Export)).SelectMany(p=>p.MeshIndices).Distinct().ToArray();
+    var materialList=used.SelectMany(i=>model.Meshes[i]?.Segments ?? new()).Select(s=>s.Material).Where(m=>m!=null).DistinctBy(m=>m.Id).ToList();
+    var mats=WriteMaterials(materialList!,output);
+    var meshes=new List<object>();
+    foreach(var i in used) {
+     var mesh=model.Meshes[i];if(mesh==null)continue;
+     var pos=mesh.GetPositions().Select(p=>V(Vector3.Transform(p,mesh.PositionBounds.CreateExpansionMatrix()))).ToArray();
+     var uv=mesh.GetTexCoords()?.Select(p=>{var v=Vector2.Transform(p,mesh.TextureBounds.CreateExpansionMatrix());return new[]{v.X,1-v.Y};}).ToArray();
+     var normals=mesh.GetNormals()?.Select(V).ToArray();
+     meshes.Add(new {name="mesh_"+i,positions=pos,uv,normals,segments=mesh.Segments.Select(s=>new{material=s.Material?.Id??-1,indices=mesh.GetTriangleIndicies(s).ToArray()}).ToArray()});
+    }
+    Save(Path.Combine(output,"preview.json"),new{version=1,tag=tagPath,section,units="halo",collision="missing",materials=mats,meshes});
+   } else throw new Exception("Unknown operation: "+op);
+   Console.WriteLine(JsonSerializer.Serialize(new{version=1,ok=true,output}));return 0;
+  } catch(Exception e){Console.Error.WriteLine(e);return 1;}
+ }
+ internal static List<object> WriteMaterials(IEnumerable<Material> materials,string output,List<string>? warnings=null) {
+    Directory.CreateDirectory(output);var mats=new List<object>();
+    foreach(var m in materials) {
+     var textures=new List<object>();
+     foreach(var tm in m.TextureMappings.Where(t=>t.Texture!=null && new[]{"diffuse","normal","transparency"}.Contains(t.Usage))) {
+      var tex=tm.Texture;var texName="texture_"+tex.Id+".png";var full=Path.Combine(output,texName);
+      try {if(!File.Exists(full))tex.GetDds().WriteToDisk(full,System.Drawing.Imaging.ImageFormat.Png);textures.Add(new{name=tex.Name,usage=tm.Usage,path=texName,tiling=new[]{tm.Tiling.X,tm.Tiling.Y},gamma=tex.Gamma,channels=(int)tm.ChannelMask});}
+      catch(Exception e){Console.Error.WriteLine("Texture "+tex.Name+": "+e.Message);if(warnings==null)throw;warnings.Add("Missing texture "+tex.Name+": "+e.Message);}
+     }
+     m.CustomProperties.TryGetValue("tag_name",out var shader);
+     mats.Add(new{id=m.Id,name=m.Name,shader=shader?.ToString()??"",alpha=m.AlphaMode,textures});
+    }
+    return mats;
+ }
+}
+
+

@@ -1,0 +1,26 @@
+__pycache__/
+*.pyc
+**/obj/
+**/bin/
+dist/
+*.pdb
+*.blend*
+*.map
+*.rmf
+*.amf
+*.jms
+*.ASS
+*.png
+*.tif
+*.dds
+catalogue.json
+preview.json
+collision.json
+stamp.json
+manifest.json
+*.log
+jobs/
+backups/
+Demo Data/
+.env*
+

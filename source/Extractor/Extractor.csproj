@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><LangVersion>13.0</LangVersion><ReclaimerRoot Condition="'$(ReclaimerRoot)'==''">../Reclaimer</ReclaimerRoot><AssemblyName>HaloBridge.Extractor</AssemblyName></PropertyGroup>
+ <ItemGroup><ProjectReference Include="$(ReclaimerRoot)/Reclaimer.Blam/Reclaimer.Blam.csproj" /></ItemGroup>
+</Project>
+

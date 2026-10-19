@@ -1,0 +1,136 @@
+"""Transactional level compilation. Only the explicitly selected project namespace is replaced."""
+import contextlib
+import os
+import shutil
+import subprocess
+import time
+import re
+from pathlib import Path
+from .catalog import read_json, write_json, safe_level
+from .jobs import helper, run_process, Cancelled
+from .diagnostics import ValidationError
+from .progress import ToolProgress,tool_label
+
+def ensure_sapien_closed():
+    if os.name!='nt': return
+    r=subprocess.run(['tasklist','/FO','CSV','/NH'],capture_output=True,text=True,creationflags=subprocess.CREATE_NO_WINDOW)
+    if r.returncode: raise RuntimeError('Cannot check whether Sapien is running. Close Sapien and retry.')
+    if any('"'+name+'"' in r.stdout.lower() for name in ('sapien.exe','sapien_play.exe')):
+        raise RuntimeError('Save and close Sapien before preparing the level. This prevents overwriting unsaved editor changes.')
+
+@contextlib.contextmanager
+def project_transaction(kit, level, cache):
+    safe_level(level);kit=Path(kit).resolve();cache=Path(cache)
+    # The lock is shared by every project/cache using this editing kit.
+    lock=kit/'halo_bridge.build.lock'
+    fd=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY)
+    os.write(fd,str(os.getpid()).encode());os.close(fd)
+    backup=cache/'backups'/str(time.time_ns());backup.mkdir(parents=True)
+    targets=[]
+    try:
+        for kind in ('data','tags'):
+            target=kit/kind/'levels/multi'/level
+            if target.resolve().parent != (kit/kind/'levels/multi').resolve(): raise ValueError('Unsafe output directory')
+            existed=target.exists();targets.append((kind,target,existed))
+            if existed: shutil.copytree(target,backup/kind)
+        write_json(backup/'transaction.json',{'kit':str(kit),'level':level,'state':'running'})
+        try:
+            yield backup
+        except BaseException:
+            for kind,target,existed in targets:
+                if target.exists(): shutil.rmtree(target)
+                if existed: shutil.copytree(backup/kind,target)
+            write_json(backup/'transaction.json',{'kit':str(kit),'level':level,'state':'rolled_back'})
+            raise
+        write_json(backup/'transaction.json',{'kit':str(kit),'level':level,'state':'committed'})
+    finally:
+        lock.unlink(missing_ok=True)
+
+def prepare(config, ass_file, placements, cancel=None, progress=None):
+    progress=progress or (lambda message:None)
+    level=safe_level(config['level']);kit=Path(config['kit']);cache=Path(config['cache'])
+    scenario='levels\\multi\\'+level+'\\'+level
+    manifest=cache/'projects'/level/'manifest.json';previous=read_json(manifest,{})
+    target=kit/'tags'/(scenario+'.scenario')
+    if (cache/'projects'/level/'map-build.json').exists():
+        raise RuntimeError('This output was created using the older original-map mode. Choose a new Output level name to compile your edited Blender geometry and preserve that previous level.')
+    if (cache/'projects'/level/'original-copy.json').exists():
+        raise RuntimeError('This level is an original-map copy. Choose a new output level name for Blender geometry exports to protect its gameplay and Sapien edits.')
+    if target.exists() and not previous:
+        raise RuntimeError('This level already exists and is not owned by HaloBridge. Choose a new level name.')
+    if previous and previous.get('kit')!=str(kit.resolve()): raise RuntimeError('Manifest belongs to a different editing kit.')
+    sky=config.get('sky_scenario',r'levels\multi\deadlock\deadlock').replace('/', '\\')
+    sky_parts=sky.split('\\')
+    if not sky or any(p in ('','.','..') or ':' in p for p in sky_parts) or not (kit/'tags'/(sky+'.scenario')).is_file():
+        raise RuntimeError('Sky source scenario must name an existing Editing Kit scenario without its extension, for example levels\\multi\\shrine\\shrine.')
+    ensure_sapien_closed()
+    jobs=cache/'jobs';jobs.mkdir(parents=True,exist_ok=True)
+    def tag_job(operation,**kw):
+        progress({'inspect':'Checking scenario state','environment':'Applying the selected sky','sync':'Updating scenario placements','ensure_spawn':'Checking the player start','prepare_bitmaps':'Configuring converted textures','import_shaders':'Creating converted Halo 3 shaders'}.get(operation,operation))
+        ensure_sapien_closed()
+        return helper('tags',dict(operation=operation,kit=str(kit),scenario=scenario,output=str(jobs/'tag-result.json'),**kw),jobs,cancel)
+    def tool(*args):
+        ensure_sapien_closed();progress(tool_label(args[0]))
+        if cancel and cancel.is_set():raise Cancelled('Cancelled')
+        try:
+            log=jobs/(str(time.time_ns())+'.log')
+            return run_process([kit/'tool.exe',*args],log,cwd=kit,cancel=cancel,status=ToolProgress(args[0],log,progress))
+        except ValidationError as error:
+            names=config.get('geometry_names',{})
+            def friendly(match):
+                return '(object '+names[match[1]]+')' if match[1] in names else match[0]
+            raise ValidationError([re.sub(r'\(poop (hb_\d+)(?:\.\d+)?\)',friendly,issue) for issue in error.issues],error.stage) from error
+    progress('Backing up the previous level before compilation...')
+    with project_transaction(kit,level,cache):
+        if previous:
+            state=tag_job('inspect')['state']
+            if state!=previous['state']:raise RuntimeError('CONFLICT: Sapien changed Blender-owned placements. Restore those edits or explicitly choose Resolve conflict: use Blender.')
+        relative='levels\\multi\\'+level+'\\structure\\'+level+'.ASS'
+        destination=kit/'data'/relative;destination.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ass_file,destination)
+        aliases=list(config.get('shader_aliases',{}).values())
+        for index,alias in enumerate(aliases,1):
+            progress(f'Preparing Halo materials {index}/{len(aliases)}: '+Path(alias.get('source',alias['name'])).stem)
+            if alias.get('generated'):continue
+            source=Path(alias['source']);destination_shader=kit/'tags/levels/multi'/level/'shaders'/(alias['name']+source.suffix)
+            destination_shader.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(source,destination_shader)
+        converted=config.get('converted_shaders',[])
+        if converted:
+            bitmap_root='levels\\multi\\'+level+'\\bitmaps\\reach'
+            shader_root='levels\\multi\\'+level+'\\shaders'
+            bitmap_dir=kit/'data'/bitmap_root;bitmap_dir.mkdir(parents=True,exist_ok=True)
+            shaders=[]
+            for index,entry in enumerate(converted,1):
+                progress(f'Copying converted material {index}/{len(converted)}: '+entry['name'])
+                item=dict(path=shader_root+'\\'+entry['name'])
+                for usage,source in entry['maps'].items():
+                    source=Path(source);shutil.copy2(source,bitmap_dir/source.name)
+                    item[usage]=bitmap_root+'\\'+source.stem
+                shaders.append(item)
+            tag_job('prepare_bitmaps',shaders=shaders)
+            tool('bitmaps',bitmap_root)
+            tag_job('import_shaders',shaders=shaders)
+        text=tool('structure',relative)
+        if "=== imported structure" not in text or not target.exists():raise RuntimeError('Halo did not confirm a successful structure import.')
+        if not previous or previous.get('sky_scenario',r'levels\multi\deadlock\deadlock')!=sky: tag_job('environment',template=sky)
+        # Compilation may legitimately update derived placement fields. User edits
+        # were checked above, before running Tool with Sapien closed.
+        after_compile=tag_job('inspect')['state']
+        tag_job('sync',placements=placements,previous=after_compile)
+        if config.get('spawn_position'):tag_job('ensure_spawn',position=config['spawn_position'])
+        if config.get('lighting',True):
+            progress('Starting test lighting: 16 tool stages. Each stage can take several minutes.')
+            blob=str(100000000+time.time_ns()%900000000);blobdir='faux\\'+blob
+            tool('faux_data_sync',scenario,level)
+            tool('faux_farm_begin',scenario,level,'all','draft',blob)
+            for stage in ('dillum','pcast','radest','extillum','fgather'):
+                tool('faux_farm_'+stage,blobdir,'0','1')
+                tool('faux_farm_'+stage+'_merge',blobdir,'1')
+            tool('faux_farm_finish',blobdir)
+            tool('faux-build-linear-textures-with-intensity-from-quadratic',scenario,level)
+            tool('faux-compress-scenario-bitmaps-dxt5',scenario,level)
+            tool('faux-farm-compression-merge',scenario,level)
+        final=tag_job('inspect')
+        write_json(manifest,dict(version=1,kit=str(kit.resolve()),scenario=scenario,state=final['state'],placements=placements,completed=time.time(),lighting=bool(config.get('lighting',True)),sky_scenario=sky))
+    progress('Ready in Sapien')
+    return str(target)
+
