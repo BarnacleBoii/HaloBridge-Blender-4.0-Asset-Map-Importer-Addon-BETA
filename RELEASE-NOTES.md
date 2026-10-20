@@ -6,7 +6,6 @@ Import MCC Halo 3 assets and original map layouts into Blender 4.0. Browse, prev
 
 - **HaloBridge-0.8.4.zip**: install this ZIP through Blender 4.0 → Edit → Preferences → Add-ons → Install, then enable HaloBridge.
 - **HaloBridge-0.8.4-source.zip**: matching GPL source, including modified Reclaimer libraries, build instructions and tests.
-- **SHA256SUMS.txt**: checksums for both archives.
 
 GitHub's automatic source ZIP/TAR does not include built helpers. Follow [Installation](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/INSTALLATION.md), [First map](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/FIRST-MAP.md) and [Feature guide](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/FEATURES.md) in the repository before starting.
 

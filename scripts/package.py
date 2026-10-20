@@ -1,6 +1,5 @@
 """Build audited public archives from this repository, never its parent folder."""
 import ast
-import hashlib
 from pathlib import Path
 import zipfile
 
@@ -57,8 +56,7 @@ def main():
     dist=ROOT/'dist';dist.mkdir(exist_ok=True)
     outputs=[dist/f'HaloBridge-{version}.zip',dist/f'HaloBridge-{version}-source.zip']
     write_zip(outputs[0],addon);write_zip(outputs[1],files)
-    checksums=''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in outputs)
-    (dist/'SHA256SUMS.txt').write_text(checksums,encoding='utf-8')
-    print(checksums,end='')
+    for output in outputs:print(output.name)
+
 
 if __name__=='__main__':main()

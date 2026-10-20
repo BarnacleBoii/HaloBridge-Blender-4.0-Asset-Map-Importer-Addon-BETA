@@ -13,7 +13,7 @@ python .\scripts\package.py
 
 The build reads `bin/ManagedBlam.dll` from the kit as a reference but does not copy it. Release helpers go into `halo_bridge/bin`. The source tree includes the modified Reclaimer sources; no separate checkout is required. NuGet restore requires network access unless packages are already cached.
 
-The packager emits the Blender add-on ZIP, matching source ZIP, and SHA256SUMS in `dist/`. It only packages approved helper files and rejects game data and personal build paths. Always distribute both ZIPs together. Never package the repository's parent directory or a local demo project.
+The packager emits the Blender add-on ZIP and matching source ZIP in `dist/`. It only packages approved helper files and rejects game data and personal build paths. Always distribute both ZIPs together. Never package the repository's parent directory or a local demo project.
 
 ## Tests
 

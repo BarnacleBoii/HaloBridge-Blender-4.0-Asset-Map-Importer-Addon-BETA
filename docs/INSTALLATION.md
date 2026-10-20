@@ -24,7 +24,6 @@ Open the [v0.8.4 release](https://github.com/barnacleboii/HaloBridge-Blender-4.0
 | --- | --- |
 | `HaloBridge-0.8.4.zip` | Install this in Blender; includes the compiled helpers |
 | `HaloBridge-0.8.4-source.zip` | Matching source and build instructions for contributors |
-| `SHA256SUMS.txt` | File checksums for these two archives |
 | GitHub's automatic Source code ZIP / TAR | Repository snapshot; build the helpers before using it |
 
 ## Install in Blender
