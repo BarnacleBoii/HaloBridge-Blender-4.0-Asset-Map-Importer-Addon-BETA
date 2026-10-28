@@ -39,6 +39,11 @@ See [Reach setup and limitations](docs/REACH.md).
 
 ## Requirements at a glance
 
+**MCC game files and Mod Tools are separate requirements.** Install MCC Halo 3 for its `.map` files. For the full Halo 3 placement/Sapien workflow, also install **Halo 3 Mod Tools - MCC (H3EK)** and extract its supplied tag/data archives. The Editing Kit alone does not replace the MCC maps installation.
+
+For Reach imports, install MCC Halo: Reach. The current Reach setup checker also expects **Halo: Reach Mod Tools - MCC (HREK)**, but asset extraction does not require extracted HREK tags. Preparing Reach assets for Halo 3 still requires **H3EK with extracted Halo 3 tags**, not Reach Sapien. See [which files each workflow needs](docs/INSTALLATION.md#mcc-maps-versus-mod-tools).
+
+
 - Windows x64 and **Blender 4.0** (tested with 4.0.0).
 - Your own installed **MCC Halo 3** map files; MCC **Halo: Reach** is optional for experimental Reach imports. Keep resource maps alongside level maps.
 - **.NET 10 Windows x64 Desktop Runtime** for the extraction helper.
