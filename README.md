@@ -4,9 +4,23 @@ A Blender 4.0 Addon that allows Quickly Importing Halo:MCC fully textured static
 (Coded with Chat GPT 6 Astra, guided by user input)
 **v0.8.4 · Beta preview · Windows x64 · Blender 4.0**
 
-**[Download v0.8.4](https://github.com/barnacleboii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases/tag/v0.8.4)** · **[Installation](docs/INSTALLATION.md)** · **[First map tutorial](docs/FIRST-MAP.md)** · **[Feature guide](docs/FEATURES.md)** · **[Troubleshooting](docs/TROUBLESHOOTING.md)**
+**[Releases and Downloads](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases)** · **[Installation](docs/INSTALLATION.md)** · **[First map tutorial](docs/FIRST-MAP.md)** · **[Feature guide](docs/FEATURES.md)** · **[Troubleshooting](docs/TROUBLESHOOTING.md)**
 
-Download **HaloBridge-0.8.4.zip** from the release assets. GitHub's automatic **Source code** downloads are for development and do not include the compiled helpers needed to run the add-on.
+## Releases and Downloads
+
+### [Open HaloBridge Releases →](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases)
+
+Open the release you want, expand **Assets**, and download its **HaloBridge-<version>.zip** to install in Blender. You only need the installable add-on ZIP.
+
+| File | What it is for |
+| --- | --- |
+| `HaloBridge-<version>.zip` | Blender add-on, including the compiled helpers |
+| `HaloBridge-<version>-source.zip` | Matching source for developers and contributors |
+
+GitHub's automatic **Source code** ZIP/TAR downloads are for development and do not include the compiled helpers needed to run the add-on.
+
+Follow the [installation guide](docs/INSTALLATION.md) for requirements and setup. **Draft releases are review builds and are not available as published downloads.**
+
 
 ## Halo 3 and Halo: Reach
 
