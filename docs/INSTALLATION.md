@@ -14,7 +14,7 @@
 | [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) | **10**, Windows **x64** Desktop Runtime, not only the base .NET runtime |
 | [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8 or newer** |
 
-You need existing H3EK shader tags for assets you export. The default sky uses High Ground (`deadlock`); the starter shell uses the jungle map. See [Microsoft's H3EK overview](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/quickstart/quickstartoverview) for the game toolchain. HaloBridge does not install these dependencies for you.
+See [Microsoft's H3EK overview](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/quickstart/quickstartoverview) for the game toolchain. HaloBridge does not install these dependencies for you.
 
 ## MCC maps versus Mod Tools
 
