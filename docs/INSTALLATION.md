@@ -16,17 +16,6 @@
 
 See [Microsoft's H3EK overview](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/quickstart/quickstartoverview) for the game toolchain. HaloBridge does not install these dependencies for you.
 
-## MCC maps versus Mod Tools
-
-**These are separate installations.** “Supply your own MCC maps” means install the relevant game content in **Halo: The Master Chief Collection for PC**. HaloBridge reads its compiled `.map` files to extract models and textures. Installing the Mod Tools alone does not supply that MCC game folder.
-
-| Workflow | What you need |
-| --- | --- |
-| Index or import a whole Halo 3 map's static layout | Installed MCC Halo 3, including `halo3/maps` and its resource maps |
-| Use the full Halo 3 asset-placement workflow and prepare a Halo 3 Sapien level | MCC Halo 3 **plus Halo 3 Mod Tools - MCC (H3EK), with its tag archives extracted**. Individual BSP-instance extraction also reads the original H3EK collision tags. |
-| Import Reach assets or a Reach map's static layout | Installed MCC Halo: Reach, including `haloreach/maps` and its resource maps. The current **Check setup** also expects **Halo: Reach Mod Tools - MCC (HREK)**, although extraction itself reads MCC maps, not HREK tags. |
-| Use Reach assets in a Halo 3 Sapien level | MCC Reach assets **plus H3EK with extracted Halo 3 tags** and the Halo exporter. Switch **Import game** back to **Halo 3** before preparation. Reach Sapien is not used; extracting HREK tags is not required by this conversion. |
-
 The current Halo 3 **Check setup** checks the full Editing Kit/export setup even if you only intend to import. A missing-kit warning does not mean the map files should be placed inside the Editing Kit.
 
 ### Install the Editing Kit for Halo 3 preparation
@@ -45,13 +34,12 @@ Open the [v0.8.4 release](https://github.com/barnacleboii/HaloBridge-Blender-4.0
 
 | Download | Purpose |
 | --- | --- |
-| `HaloBridge-0.8.4.zip` | Install this in Blender; includes the compiled helpers |
-| `HaloBridge-0.8.4-source.zip` | Matching source and build instructions for contributors |
-| GitHub's automatic Source code ZIP / TAR | Repository snapshot; build the helpers before using it |
+| `HaloBridge-0.8.4.zip` | Install this as a Blender 4.0 addon |
+| `HaloBridge-0.8.4-source.zip` | Developers ONLY, source and build instructions for contributors |
 
 ## Install in Blender
 
-1. Save your work. In Blender, open **Edit → Preferences → Add-ons → Install**.
+1. Save project. In Blender, open **Edit → Preferences → Add-ons → Install**.
 2. Select `HaloBridge-0.8.4.zip` without unzipping it.
 3. Enable **HaloBridge - Blender 4.0 Importing** and the required Halo exporter.
 4. In a 3D View, press **N** and open **HaloBridge**.
