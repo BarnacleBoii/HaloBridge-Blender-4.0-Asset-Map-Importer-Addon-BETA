@@ -12,7 +12,7 @@ A Blender 4.0 Addon that allows Quickly Importing Halo:MCC fully textured static
 
 ### [Open HaloBridge Releases →](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases)
 
-Open the release you want, expand **Assets**, and download its **HaloBridge-<version>.zip** to install in Blender. You only need the installable add-on ZIP.
+Open the latest release, expand **Assets**, and download **HaloBridge-<version>.zip** to install in Blender. You only need the installable add-on ZIP.
 
 | File | What it is for |
 | --- | --- |
