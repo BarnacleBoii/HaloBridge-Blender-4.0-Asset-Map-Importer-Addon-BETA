@@ -2,7 +2,7 @@
 
 # HaloBridge — Blender 4.0 Asset / Map Importer + Sapien Level Preparation(Beta)
 
-A Blender 4.0 Addon that allows Quickly Importing Halo:MCC fully textured static game assets and entire .maps full textured into Blender, and an experimental option to prepare the current blender scene for a Halo 3 Sapien test level. Currently Supports Halo 3,Halo Reach. I plan on every game from Halo: MCC.
+A Blender 4.0 Addon that allows Quickly Importing Halo:MCC fully textured static game assets and entire .maps full textured into Blender, and an experimental option to prepare the current blender scene for a Halo 3 Sapien test level. Currently Supports Halo 3,Halo Reach. more planned.
 (Coded with Chat GPT 6 Astra, guided by user input)
 **v0.8.5 · Beta preview · Windows x64 · Blender 4.0**
 
