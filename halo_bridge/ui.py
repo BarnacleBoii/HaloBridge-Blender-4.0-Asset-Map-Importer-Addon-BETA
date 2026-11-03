@@ -12,7 +12,7 @@ from bpy.props import StringProperty, BoolProperty, IntProperty, CollectionPrope
 from .catalog import detect_paths,read_json,write_json,scan_library,merge_assets,indexed_assets,safe_level
 from . import jobs, build, blender_ops, setup, map_scene, navigation, map_export, skies, geometry_export
 from .diagnostics import ValidationError
-from . import source_names
+from . import source_names,export_review,shader_choices
 
 def record_failure(error, details=None):
     global _error,_message,_reported_issues
@@ -68,8 +68,13 @@ class HBAsset(bpy.types.PropertyGroup):
 
 def visibility_predicate(settings):
     query=settings.search.lower();level=settings.filter_level;hidden=settings.asset_tab=='HIDDEN'
+    # Resolve the stored enum number against retained entries. Normalize old
+    # catalogues that used paths, .map extensions or inconsistent casing.
+    raw=settings.get('filter_level')
+    if isinstance(raw,int):level=next((row[0] for row in level_items(settings,None) if row[3]==raw),'__ALL__')
+    level=level_key(level)
     categories={name:getattr(settings,'show_'+name,True) for name in ('vegetation','structures','materials','rocks','water')}
-    return lambda item: (item.hidden==hidden and (level=='__ALL__' or item.level==level)
+    return lambda item: (item.hidden==hidden and (level=='__ALL__' or level_key(item.level)==level)
                         and (not query or query in (item.name+' '+item.level+' '+item.kind).lower())
                         and categories.get(item.category.lower(),True))
 
@@ -77,14 +82,19 @@ def row_visible(settings,item):
     return visibility_predicate(settings)(item)
 
 _level_items=[]
+_retired_level_items=[]
 _level_items_token=None
+def level_key(value):
+    if value=='__ALL__':return value
+    return str(value).strip().replace('\\','/').rsplit('/',1)[-1].removesuffix('.map').lower()
 def level_items(settings,context):
     global _level_items,_level_items_token
     token=(settings.id_data.as_pointer(),len(settings.assets))
     if token==_level_items_token:return _level_items
-    levels=sorted({a.level for a in settings.assets})
+    levels=sorted({level_key(a.level) for a in settings.assets})
     # Keep strings alive for Blender's dynamic enum callback.
     if [entry[0] for entry in _level_items[1:]]!=levels or not _level_items:
+        _retired_level_items.append(_level_items)
         _level_items=[('__ALL__','All Levels','Show assets from every indexed map',0)]+[(level,level,'Show assets indexed from '+level,1+(__import__('zlib').crc32(level.encode())&0x3fffffff)) for level in levels]
     _level_items_token=token
     return _level_items
@@ -150,7 +160,10 @@ class HBSettings(bpy.types.PropertyGroup):
     cache:StringProperty(name='Project and cache folder',subtype='DIR_PATH',description='Stores automatically extracted assets, project records, backups, and job logs for reuse')
     map_name:StringProperty(name='.map file name to Index',default='010_jungle.map',description='Filename for the selected game, such as 010_jungle.map for Halo 3 or 70_boneyard.map for Reach')
     level:StringProperty(name='Output Level Name (without .map)',default='hb_jungle_map',description='Name for your generated level; use 3–32 lowercase letters, digits, or underscores, starting with a letter')
+    export_target:EnumProperty(name='Export to Sapien',items=[('halo3','Halo 3','Prepare using the Halo 3 Editing Kit'),('reach','Halo: Reach — not available yet','Reach importing is supported, but Reach Sapien compilation and tag writing are not implemented')],default='halo3')
+    skip_invalid:BoolProperty(name='Skip objects with export problems',default=False,description='After review, omit entire objects with detected mesh or material problems. Objects stay in Blender. Compiler errors still stop the build')
     sky_choice:EnumProperty(name='(Experimental) Sky From Map',description='Choose the primary sky from any scanned Editing Kit map. Existing lightmaps and weather are not converted',items=skies.items)
+    sky_selected:StringProperty(default='AUTO',description='Selected source scenario, stored independently of the scanned list')
     sky_scenario:StringProperty(name='Sky source scenario',default='levels\\multi\\deadlock\\deadlock',description='Existing Editing Kit scenario whose sky references are used; no .scenario extension. Whole-map imports fill this from their source. This does not copy terrain or gameplay')
     lighting:BoolProperty(name='Generate Test Lighting for Sapien Level',default=True,description='Generate quick test lighting during Sapien preparation; turn off for faster geometry iterations')
     open_sapien:BoolProperty(name='Open Sapien when ready',default=False,description='Launch the prepared scenario in Sapien automatically after a successful build')
@@ -168,6 +181,9 @@ class HBSettings(bpy.types.PropertyGroup):
     preview_enabled:BoolProperty(default=False)
     follow_outliner:BoolProperty(name='Reveal selected asset in Outliner',default=True,description='Expand collections and scroll to the newly selected HaloBridge object in visible View Layer Outliners')
     shader_path:StringProperty(name='(Experimental) Shader Tag Path',description='Existing shader path relative to the Editing Kit tags folder, without its file extension')
+    shader_choice:EnumProperty(name='Existing Halo shader',items=shader_choices.items,description='Choose an installed shader for the active Blender material; does not create a shader or change preview textures')
+    shader_level:EnumProperty(name='Shader level / category',items=shader_choices.level_items,update=shader_choices.level_changed,description='Limit the shader search to a source level or shared asset category')
+    shader_manual:BoolProperty(name='Enter shader path manually',default=False)
     setup:BoolProperty(name='Folders and Setup',default=True,description='Show or hide installation folders and map indexing controls')
     preview_previous_object:PointerProperty(type=bpy.types.Object)
     preview_object:PointerProperty(type=bpy.types.Object)
@@ -179,7 +195,9 @@ def config(context):
     if not s.cache:s.cache=str(Path.home()/'Documents/HaloBridge')
     result={n:getattr(s,n) for n in ('game','kit','maps','library','cache','level','lighting','sky_scenario')}
     for n in ('kit','maps','library','cache'):result[n]=bpy.path.abspath(result[n])
-    if s.sky_choice!='AUTO':result['sky_scenario']=s.sky_choice
+    result['skip_invalid']=s.skip_invalid;result['export_target']=s.export_target
+    if s.sky_selected!='AUTO':result['sky_scenario']=s.sky_selected
+    elif s.sky_choice and s.sky_choice!='AUTO':result['sky_scenario']=s.sky_choice
     return result
 
 def ensure_catalogue(context,force=False):
@@ -215,7 +233,7 @@ def refresh(context,persist=True):
         row=s.assets.add();row.name=a['name'];row.asset_id=a['id'];row.level=a['level'];row.category=a['category'];row.kind=a['kind']
         row.hidden=bool(a.get('hidden',False));row.checked=a['id'] in checked
     _level_items_token=None
-    if previous_level!='__ALL__' and previous_level not in {a.level for a in s.assets}:s.filter_level='__ALL__'
+    if previous_level!='__ALL__' and level_key(previous_level) not in {level_key(a.level) for a in s.assets}:s.filter_level='__ALL__'
     predicate=visibility_predicate(s)
     visible=[i for i,a in enumerate(s.assets) if predicate(a)]
     s.active_index=next((i for i in visible if s.assets[i].asset_id==previous),visible[0] if visible else -1)
@@ -392,7 +410,7 @@ class Guard:
             if _task:raise RuntimeError('A HaloBridge job is running. Wait or cancel it first.')
             return self.run(context) or {'FINISHED'}
         except Exception as e:
-            if self.bl_idname=='halo_bridge.prepare':prepare_status('Preparation failed: '+(str(e).strip() or type(e).__name__).splitlines()[0])
+            if self.bl_idname in {'halo_bridge.prepare','halo_bridge.confirm_prepare'}:prepare_status('Preparation failed: '+(str(e).strip() or type(e).__name__).splitlines()[0])
             issues=record_failure(e,traceback.format_exc())
             for issue in issues:self.report({'WARNING'},issue)
             self.report({'ERROR'},_message);return {'CANCELLED'}
@@ -777,6 +795,27 @@ class HBGround(Guard,bpy.types.Operator):
             _message='Created textured starter shell. Material Preview is enabled.'
         start(context,lambda cancel:jobs.extract(asset,cfg,cancel),done,'Loading starter shell ground texture…')
 
+class HBScanShaders(Guard,bpy.types.Operator):
+    bl_idname='halo_bridge.scan_shaders';bl_label='Scan existing shaders'
+    bl_description='List existing .shader tags from the selected Editing Kit; no new shaders are created'
+    def run(self,context):
+        global _message
+        _message='Found '+str(shader_choices.scan(context.scene.halo_bridge.kit))+' existing shaders.'
+        context.scene.halo_bridge.shader_level='ALL'
+        context.scene.halo_bridge.shader_choice='NONE'
+
+class HBChooseShader(bpy.types.Operator):
+    bl_idname='halo_bridge.choose_shader';bl_label='Search existing shaders'
+    bl_description='Search shaders in the selected level or category; then click Assign existing Halo shader to apply your choice'
+    bl_property='choice'
+    choice:EnumProperty(items=shader_choices.search_items)
+    def invoke(self,context,event):
+        context.window_manager.invoke_search_popup(self)
+        return {'RUNNING_MODAL'}
+    def execute(self,context):
+        context.scene.halo_bridge.shader_choice=self.choice
+        return {'FINISHED'}
+
 class HBShader(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.shader';bl_label='Assign existing Halo shader';bl_options={'REGISTER','UNDO'}
     bl_description='Link the active material to the existing Halo shader tag entered above so the level uses that shader in game'
@@ -784,9 +823,25 @@ class HBShader(Guard,bpy.types.Operator):
         from .catalog import material_name
         obj=context.active_object
         if not obj or not obj.active_material:raise RuntimeError('Select an object with an active material.')
-        tag=context.scene.halo_bridge.shader_path.replace('/','\\')
-        material_name(context.scene.halo_bridge.kit,tag);obj.active_material['hb_shader']=tag
+        settings=context.scene.halo_bridge
+        tag=(settings.shader_path if settings.shader_manual else settings.shader_choice).replace('/','\\')
+        if tag=='NONE':raise RuntimeError('Scan existing shaders and choose one first.')
+        export_review.shader_file(context.scene.halo_bridge.kit,tag);obj.active_material['hb_shader']=tag
         obj.active_material['hb_shader_game']=context.scene.halo_bridge.game
+
+class HBChooseSky(bpy.types.Operator):
+    bl_idname='halo_bridge.choose_sky';bl_label='Choose sky from map'
+    bl_description='Search installed map skies; the selected scenario is shown below and saved with the scene'
+    bl_property='choice'
+    choice:EnumProperty(items=lambda self,context:skies.items(context.scene.halo_bridge,context) if context else [])
+    def invoke(self,context,event):
+        context.window_manager.invoke_search_popup(self)
+        return {'RUNNING_MODAL'}
+    def execute(self,context):
+        s=context.scene.halo_bridge
+        s.sky_choice=self.choice;s.sky_selected=self.choice
+        s.sky_scenario=self.choice if self.choice!='AUTO' else 'levels\\multi\\deadlock\\deadlock'
+        return {'FINISHED'}
 
 class HBRefreshSkies(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.refresh_skies';bl_label='Find map skies'
@@ -815,9 +870,27 @@ def prepare_button_text():
 
 _pending_prepare_warning=None
 
+def preparation_warnings(context,cfg):
+    warnings=geometry_export.warnings(context.scene)
+    selected=[o for o in geometry_export.objects(context.scene) if not geometry_export.is_sky(o)]
+    issues,_,_=export_review.inspect(selected,cfg)
+    if issues:
+        lines=export_review.messages(issues)
+        report=bpy.data.texts.get('HaloBridge export exclusions') or bpy.data.texts.new('HaloBridge export exclusions')
+        report.clear();report.write('Objects with export problems (entire objects omitted only if skipping is enabled):\n\n'+'\n\n'.join(lines))
+        if not cfg.get('skip_invalid'):
+            raise ValidationError(lines+['Fix these objects, or enable Skip objects with export problems and prepare again to review the exclusions.'])
+        if len(issues)==len(selected):raise ValidationError(lines+['No exportable objects remain. At least one valid mesh is required.'])
+        warnings.extend('WILL NOT EXPORT — '+line for line in lines)
+    return warnings
+
 def confirm_map_warnings(context,cfg,error):
-    global _pending_prepare_warning
-    record_failure(error)
+    global _pending_prepare_warning,_error,_message,_reported_issues
+    # Reviewable limitations are not failed builds. Keep the decision available
+    # in the sidebar even when Blender dismisses the transient popup.
+    _error=''
+    _reported_issues=[]
+    _message='Preparation needs confirmation. Choose Continue with warnings or Cancel above the Prepare button.'
     token=str(time.time_ns())
     _pending_prepare_warning=dict(token=token,scene=context.scene.as_pointer(),config=dict(cfg),issues=list(error.issues))
     def draw(menu,ctx):
@@ -828,7 +901,7 @@ def confirm_map_warnings(context,cfg,error):
         layout.separator()
         for issue in error.issues[:8]:
             for line in textwrap.wrap(issue,width=95):layout.label(text=line)
-        if len(error.issues)>8:layout.label(text='All '+str(len(error.issues))+' issues are in the diagnostic report.')
+        if len(error.issues)>8:layout.label(text='All '+str(len(error.issues))+' warnings are above the Prepare button.')
         layout.separator()
         op=layout.operator('halo_bridge.confirm_prepare',text='Continue with warnings',icon='CHECKMARK');op.token=token;op.accept=True
         op=layout.operator('halo_bridge.confirm_prepare',text='Cancel',icon='CANCEL');op.token=token;op.accept=False
@@ -849,10 +922,12 @@ class HBConfirmPrepare(Guard,bpy.types.Operator):
             _message='Preparation cancelled. No level files were written.';prepare_status(_message);return {'CANCELLED'}
         if pending['scene']!=context.scene.as_pointer() or pending['config']!=config(context):
             raise RuntimeError('The scene or setup changed. Prepare again to review current warnings.')
-        current=geometry_export.warnings(context.scene)
+        current=preparation_warnings(context,pending['config'])
         if current!=pending['issues']:
             raise RuntimeError('The detected issues changed. Prepare again to review the current list.')
-        return bpy.ops.halo_bridge.prepare('EXEC_DEFAULT',warnings_accepted=True)
+        # One error boundary: nested bpy operators turn the detailed validation
+        # error into a generic RuntimeError and overwrite its diagnostic report.
+        return HBPrepare.run(self,context,warnings_accepted=True)
 
 class HBPrepare(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.prepare';bl_label='Prepare current scene for sapien'
@@ -869,10 +944,13 @@ class HBPrepare(Guard,bpy.types.Operator):
             bpy.ops.halo_bridge.prepare('EXEC_DEFAULT')
         bpy.app.timers.register(begin,first_interval=.15)
         return {'FINISHED'}
-    def run(self,context):
+    def run(self,context,warnings_accepted=None):
+        if warnings_accepted is None:warnings_accepted=self.warnings_accepted
         prepare_status('Validating current scene...',True)
         reconcile_preview_copies(context)
         cfg=config(context)
+        if cfg.get('export_target','halo3')!='halo3':
+            raise RuntimeError('Reach Sapien export is not implemented yet. Choose Halo 3; Reach assets can still be converted into a Halo 3 level.')
         if cfg['game']!='halo3':
             raise RuntimeError('Switch Import game to Halo 3 to choose the Halo 3 Editing Kit and prepare this scene. Your Reach objects stay in the scene and are converted automatically.')
         safe_level(cfg['level']);build.ensure_sapien_closed()
@@ -894,11 +972,11 @@ class HBPrepare(Guard,bpy.types.Operator):
             global _message
             _message='Ready: '+path;prepare_status('Finished. Level prepared for Sapien.')
             if context.scene.halo_bridge.open_sapien:open_sapien(cfg)
-        warnings=geometry_export.warnings(context.scene)
-        if warnings and not self.warnings_accepted:
+        warnings=preparation_warnings(context,cfg)
+        if warnings and not warnings_accepted:
             prepare_status('Waiting for confirmation: review preparation warnings.')
             confirm_map_warnings(context,cfg,ValidationError(warnings,'Geometry export warnings'));return
-        if context.scene.halo_bridge.sky_choice=='AUTO':
+        if context.scene.halo_bridge.sky_selected=='AUTO' and context.scene.halo_bridge.sky_choice in ('AUTO',''):
             manifests={o.get('hb_map_manifest') for o in geometry_export.objects(context.scene) if o.get('hb_map_manifest')}
             sources={read_json(p,{}).get('scenario','') for p in manifests}
             if len(sources)==1:
@@ -997,7 +1075,7 @@ class HB_UL_assets(bpy.types.UIList):
         layout.prop(item,'checked',text='')
         layout.label(text=item.name,icon_value=icon_id,icon='NONE' if icon_id else ('MATERIAL' if item.kind=='material' else 'OUTLINER_OB_MESH'))
         if item.kind=='material':layout.label(text='Material')
-        if item.kind=='model':layout.label(text='Source check',icon='INFO')
+        if item.kind=='model':layout.label(text='Static model',icon='INFO')
         row=layout.row();row.enabled=_task is None
         op=row.operator('halo_bridge.list_action',text='',icon='HIDE_ON' if item.hidden else 'HIDE_OFF',emboss=False)
         op.action='UNHIDE' if item.hidden else 'HIDE';op.asset_id=item.asset_id
@@ -1136,22 +1214,51 @@ class HBPanel(bpy.types.Panel):
             l.label(text='To export these assets to Halo 3:')
             l.label(text='Switch Import game to Halo 3, then Prepare.')
             return
-        l.separator();l.prop(s,'shader_path');l.operator('halo_bridge.shader')
+        l.separator();l.label(text='Existing Halo shader (game appearance)')
+        l.label(text='Assigned HaloBridge materials already include this.')
+        l.operator('halo_bridge.scan_shaders',icon='FILE_REFRESH')
+        l.label(text='Shader level / category');l.prop(s,'shader_level',text='')
+        shader=s.shader_choice
+        label=shader.replace('\\','/').rsplit('/',1)[-1] if shader and shader!='NONE' else 'Choose an existing shader...'
+        l.operator('halo_bridge.choose_shader',text=label,icon='VIEWZOOM')
+        l.prop(s,'shader_manual')
+        if s.shader_manual:l.prop(s,'shader_path')
+        l.operator('halo_bridge.shader')
         l.separator();l.label(text='(Experimental) Sapien Map Preparation')
+        l.prop(s,'export_target')
+        if s.export_target=='reach':
+            l.label(text='Reach Sapien export is not available yet.',icon='INFO')
+            l.label(text='Choose Halo 3 to prepare this scene.')
+            return
+        l.prop(s,'skip_invalid')
         l.label(text='Output Level Name (without .map)')
         l.prop(s,'level',text='');l.label(text='Example: shrine20')
-        l.prop(s,'sky_choice');row=l.row();row.enabled=_task is None;row.operator('halo_bridge.refresh_skies',icon='WORLD')
+        l.label(text='(Experimental) Sky From Map')
+        selected_sky=s.sky_selected if s.sky_selected!='AUTO' else (s.sky_choice or 'AUTO')
+        label=selected_sky.replace('\\','/').rsplit('/',1)[-1] if selected_sky!='AUTO' else 'Original map / default sky'
+        l.operator('halo_bridge.choose_sky',text=label,icon='WORLD')
+        for line in textwrap.wrap('Selected: '+selected_sky,width=40):l.label(text=line)
+        row=l.row();row.enabled=_task is None;row.operator('halo_bridge.refresh_skies',icon='WORLD')
         l.label(text='Current meshes: generated static collision.')
         l.prop(s,'lighting')
         l.prop(s,'open_sapien')
         status=l.box();status.label(text='Map Preparation Status',icon='INFO')
         width=max(24,int(context.region.width/7))
         for line in textwrap.wrap(_prepare_status,width=width):status.label(text=line)
+        if _pending_prepare_warning and _pending_prepare_warning['scene']==context.scene.as_pointer():
+            review=l.box();review.label(text='Review preparation warnings',icon='INFO')
+            for issue in _pending_prepare_warning['issues']:
+                for line in textwrap.wrap(issue,width=width):review.label(text=line)
+            row=review.row();row.enabled=_task is None and not _prepare_running
+            op=row.operator('halo_bridge.confirm_prepare',text='Continue with warnings',icon='CHECKMARK')
+            op.token=_pending_prepare_warning['token'];op.accept=True
+            op=row.operator('halo_bridge.confirm_prepare',text='Cancel',icon='CANCEL')
+            op.token=_pending_prepare_warning['token'];op.accept=False
         row=l.row();row.enabled=_task is None and not _prepare_running
         row.operator('halo_bridge.prepare',text=prepare_button_text(),icon='EXPORT')
         row=l.row();row.enabled=_task is None;row.operator('halo_bridge.open')
 
-classes=(HBApplyExtracted,HBAsset,HBSettings,HBDetect,HBCheckSetup,HBScan,HBIndex,HBPlace,HBClearSearch,HBCheckAssets,HBListHistory,HBListAction,HBPlaceChecked,HBImportMapScene,HBRepairMap,HBPreviewToggle,HBGround,HBShader,HBRefreshSkies,HBPrepare,HBConfirmPrepare,HBOpen,HBResolve,HBCancel,HBDiagnostics,HBReportDiagnostics,HBSelectCollisionIssues,HBCenterMapOrigins,HB_UL_assets,HBMessages,HBMessagesPopover,HBPanel)
+classes=(HBApplyExtracted,HBAsset,HBSettings,HBDetect,HBCheckSetup,HBScan,HBIndex,HBPlace,HBClearSearch,HBCheckAssets,HBListHistory,HBListAction,HBPlaceChecked,HBImportMapScene,HBRepairMap,HBPreviewToggle,HBGround,HBScanShaders,HBChooseShader,HBShader,HBChooseSky,HBRefreshSkies,HBPrepare,HBConfirmPrepare,HBOpen,HBResolve,HBCancel,HBDiagnostics,HBReportDiagnostics,HBSelectCollisionIssues,HBCenterMapOrigins,HB_UL_assets,HBMessages,HBMessagesPopover,HBPanel)
 
 @persistent
 def load_catalogue(_=None):

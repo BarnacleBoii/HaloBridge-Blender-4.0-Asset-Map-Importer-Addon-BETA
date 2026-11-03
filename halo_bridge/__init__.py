@@ -1,4 +1,4 @@
-bl_info = {'name':'HaloBridge - Blender 4.0 Importing','author':'HaloBridge contributors','version':(0,8,4),'blender':(4,0,0),'location':'3D View > Sidebar > HaloBridge','description':'Browse Halo 3 assets and prepare custom levels for Sapien','category':'Import-Export'}
+bl_info = {'name':'HaloBridge - Blender 4.0 Importing','author':'HaloBridge contributors','version':(0,8,5),'blender':(4,0,0),'location':'3D View > Sidebar > HaloBridge','description':'Browse Halo 3 assets and prepare custom levels for Sapien','category':'Import-Export'}
 
 def register():
     from . import ui

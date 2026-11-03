@@ -1,29 +1,30 @@
-![HaloBridge — Blender importer addon](https://raw.githubusercontent.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/main/docs/halobridgelogo.png)
+![HaloBridge](https://raw.githubusercontent.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/main/docs/halobridgelogo.png)
 
-# HaloBridge v0.8.4 — Beta
+# HaloBridge v0.8.5 — Beta
 
-Import MCC Halo 3 assets and original map layouts into Blender 4.0. Browse, preview and place assets, edit your scene, and experimentally prepare current static geometry for Halo 3 Sapien. Experimental Halo: Reach importing and static conversion into Halo 3 are included.
+## Download and update
 
-## Downloads and installation
+Download **HaloBridge-0.8.5.zip** to install the Blender addon. **HaloBridge-0.8.5-source.zip** is for developers. Save your scene, finish/cancel active jobs, remove the old addon through Blender Preferences, restart Blender, install the new ZIP, and enable HaloBridge. Keep your cache and project records.
 
-- **HaloBridge-0.8.4.zip**: install this ZIP through Blender 4.0 → Edit → Preferences → Add-ons → Install, then enable HaloBridge.
-- **HaloBridge-0.8.4-source.zip**: matching GPL source, including modified Reclaimer libraries, build instructions and tests.
+## Changes
 
-GitHub's automatic source ZIP/TAR does not include built helpers. Follow [Installation](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/INSTALLATION.md), [First map](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/FIRST-MAP.md) and [Feature guide](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/FEATURES.md) in the repository before starting.
+- **Skip objects with export problems:** optional partial preparation lists each excluded object and reason before confirmation. Objects stay in Blender. Compiler failures still stop preparation; at least one valid mesh is required.
+- **Material validation:** uses materials assigned to evaluated faces. Unused material slots no longer prevent export. Highlighting an Asset List material still does not assign it.
+- **Preparation warnings:** Continue/Cancel remain visible above Prepare. Warnings are no longer saved as failed builds, and underlying error lists are no longer overwritten by a generic confirmation error.
+- **Existing shader picker:** shaders are grouped by level/shared category and selected through a searchable popup. Use Scan existing shaders first. Manual path entry remains available.
+- **Sky picker:** searchable selection, visible selected scenario path, and selection stored independently of the scanned list. Use Find map skies first.
+- **Level Imported:** normalized map-name matching and retained dropdown entries improve selection stability. The exact reported disappearance was not reproduced locally.
+- **Static model:** replaces the confusing Source check label.
+- **Export target:** Halo 3 supported; Reach Sapien is explicitly unavailable. Reach assets can still be converted to static Halo 3 geometry.
 
-Requires Windows x64, Blender 4.0 and .NET 10 Desktop Runtime. Supply your own MCC maps. Halo 3 preparation additionally requires H3EK with extracted tags, .NET Framework 4.8+ and Halo exporter 2.364.0. No game content is bundled.
+## Requirements and guides
 
-## Included in this build
+Windows x64, Blender 4.0, .NET 10 Desktop Runtime, and your own MCC map files. The complete Halo 3 workflow requires H3EK with extracted tags, .NET Framework 4.8+, and Halo Asset Blender Development Toolset 2.364.0.
 
-- Original source material and bitmap names in Blender, with automatic migration of generated names when reopening saved scenes. User names are preserved; shader references and cache identities remain stable.
-- Mesh counts, current asset names and compiler/lighting stage status during preparation.
-- A fix for asset-only scenes reaching the lightmapper without a structure mesh.
-- Intentional material assignment and placement undo handling, plus experimental Reach texture-to-Halo-3 conversion.
+[Installation](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/INSTALLATION.md) · [Feature guide](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/FEATURES.md)
 
-## Experimental limits
+## Verification and limits
 
-Sapien preparation exports current static mesh surfaces with generated collision. It does not restore missions, AI, scripts, functioning vehicles, animated doors, breakable behavior or multiplayer modes. Whole-map imports may omit unsupported elements and approximate variants. Large maps can fail compiler or runtime limits. Reach shaders are simplified; Reach skies and gameplay are not converted. Project Reclaimer packaging and multiplayer are not verified.
+23 unit tests and Blender checks for partial export, source-scene preservation, shader assignment, filters, warning handling, Reach conversion and edited geometry passed. A real Halo 3 asset exported to ASS with its shader references intact while an invalid plane was omitted. The installed H3EK shader catalogue and a real sky scenario were checked. This is not a full playtest of testleveldudebro or all maps, nor visual validation of every popup on every display.
 
-Local checks include 23 unit tests, Blender naming/migration and undo tests, a real Halo 3 material-name compile, and a mixed Reach/Halo 3 lighting build. This is not validation of every map or a clean second Windows installation. See TESTING.md for details.
-
-Save your .blend and retain project ownership manifests/backups. Report reproducible issues with sanitized diagnostics, never game files or extracted assets.
+Sapien preparation remains experimental static geometry with generated collision. Original gameplay, animation, AI, scripts and multiplayer behavior are not recreated. Some sky/object placement differences and map extraction omissions remain unresolved. Project Reclaimer multiplayer packaging is not verified. No Halo game content is bundled.

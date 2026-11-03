@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 import bpy
 from mathutils import Vector, Matrix
-from . import blender_ops, cross_game
+from . import blender_ops, cross_game, export_review
 from .catalog import read_json
 from .diagnostics import ValidationError
 
@@ -40,26 +40,20 @@ def export(config,path,progress=None):
     selected=[o for o in objects(source) if not is_sky(o)]
     if not selected:raise ValidationError(['There are no meshes to export.'])
     blender_ops.ensure_exporter()
-    converted=cross_game.prepare(selected,Path(path).parent/"converted_textures",progress=progress)
+    issues,used,reach=export_review.inspect(selected,config)
+    if issues and not config.get('skip_invalid'):
+        raise ValidationError(export_review.messages(issues)+['To omit these entire objects, enable Skip objects with export problems and prepare again.'])
+    selected=[obj for obj in selected if obj.name not in issues]
+    config['skipped_objects']=issues
+    if not selected:raise ValidationError(['No exportable objects remain. Fix at least one object before preparing.'])
+    converted=cross_game.prepare(selected,Path(path).parent/"converted_textures",progress,materials=reach)
     config["converted_shaders"]=list(converted.values())
-    aliases={entry["name"]:dict(name=entry["name"],generated=True) for entry in converted.values()};issues=[]
-    for index,obj in enumerate(selected,1):
-        progress(f'Checking materials {index}/{len(selected)} assets: {obj.name}')
-        for mat in obj.data.materials:
-            if not mat or mat.name.startswith('+') or mat.as_pointer() in converted:continue
-            tag=mat.get('hb_shader','').replace('/', '\\')
-            if tag in aliases:continue
-            root=Path(config['kit'])/'tags';p=root/tag
-            if not tag or '..' in tag.split('\\') or not p.resolve().is_relative_to(root.resolve()):
-                issues.append(obj.name+': assign an existing Halo shader.');continue
-            matches=[f for f in p.parent.glob(p.name+'.shader*') if f.is_file()]
-            # Mesh surfaces use the regular shader when a separate decal tag
-            # happens to share its name. Decal tags describe projected decals.
-            regular=p.with_suffix('.shader')
-            if regular in matches:matches=[regular]
-            if len(matches)!=1:issues.append(obj.name+': missing or ambiguous shader '+tag);continue
-            aliases[tag]=dict(name='hb_'+hashlib.sha256(tag.encode()).hexdigest()[:20],source=str(matches[0]))
-    if issues:raise ValidationError(sorted(set(issues)))
+    aliases={entry["name"]:dict(name=entry["name"],generated=True) for entry in converted.values()}
+    for obj in selected:
+        for mat in used[obj.name]:
+            if mat.name.startswith('+') or mat.as_pointer() in converted:continue
+            tag=mat.get('hb_shader','').replace('/','\\')
+            aliases[tag]=dict(name='hb_'+hashlib.sha256(tag.encode()).hexdigest()[:20],source=str(export_review.shader_file(config['kit'],tag)))
     config['shader_aliases']=aliases
     config['geometry_names']={}
     temp=bpy.data.scenes.new('HaloBridge current geometry');meshes=[];materials=[];cache={};material_cache={}
@@ -84,6 +78,13 @@ def export(config,path,progress=None):
                         layer=mesh.uv_layers.new(name=name)
                         layer.data.foreach_set('uv',[value for pair in values for value in pair])
                     if layers:mesh.uv_layers.active_index=active
+                # Unused legacy slots must not reach the ASS material validator.
+                slot_ids=sorted({face.material_index for face in mesh.polygons})
+                slots=[mesh.materials[i] for i in slot_ids]
+                indices=[slot_ids.index(face.material_index) for face in mesh.polygons]
+                mesh.materials.clear()
+                for mat in slots:mesh.materials.append(mat)
+                for face,index in zip(mesh.polygons,indices):face.material_index=index
                 mesh.transform(stretch.to_4x4())
                 if stretch.determinant()<0:mesh.flip_normals()
                 sky_slots={i for i,m in enumerate(mesh.materials) if m and m.name.startswith('+sky')}

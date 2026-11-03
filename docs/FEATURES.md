@@ -8,7 +8,7 @@ Use **Import game**, above **Folders and Setup**, to select **Halo 3** or **Halo
 
 Browse MCC Halo 3 assets in Blender, position them in your map, and prepare a scenario for Sapien.
 
-**0.8.4 beta preview — Windows x64 and Blender 4.0.** This is an independent community project, not an official Microsoft, Bungie, or 343 Industries tool. Other Blender versions, console maps, games beyond Halo 3 and experimental Halo: Reach, and giant-map performance are not supported by this release.
+**0.8.5 beta preview — Windows x64 and Blender 4.0.** This is an independent community project, not an official Microsoft, Bungie, or 343 Industries tool. Other Blender versions, console maps, games beyond Halo 3 and experimental Halo: Reach, and giant-map performance are not supported by this release.
 
 ## What it does
 
@@ -32,7 +32,7 @@ Game files, game tags, textures, ManagedBlam, and the Halo exporter are not incl
 
 ## Install
 
-1. Download **HaloBridge-0.8.4.zip** from the project's release assets. GitHub's automatic “Source code” ZIP is for developers and does not contain built helpers.
+1. Download **HaloBridge-0.8.5.zip** from the project's release assets. GitHub's automatic “Source code” ZIP is for developers and does not contain built helpers.
 2. Save your Blender work. If replacing an older HaloBridge version, disable and remove it in Preferences, then restart Blender.
 3. Choose **Edit → Preferences → Add-ons → Install**, select the add-on ZIP without unzipping, and enable **HaloBridge - Blender 4.0 Importing**.
 4. Open the 3D View sidebar with **N**, then select **HaloBridge**.
@@ -134,3 +134,13 @@ Materials and image datablocks use original Halo source names. Full shader/bitma
 ## Preparation progress
 
 The status directly above **Prepare current scene for sapien** reports the current mesh count and asset name during geometry preparation. Later stages show the compiler or lighting phase, elapsed time and recent tool output. A quiet tool stage is reported as waiting; it does not invent a percentage. The preparation button displays **(LOADING...PLEASE WAIT)** while the job runs. Open the diagnostic report for complete detected errors; later dependent stages may reveal additional issues.
+
+## Export review and shader selection (0.8.5)
+
+An assigned HaloBridge material already carries its game shader reference. Highlighting an Asset List material only selects it for browsing; use Apply material to selected object to assign it. Export checks materials used by evaluated faces, not unused slots.
+
+Enable **Skip objects with export problems** to omit whole objects with detected material/mesh validation problems. Prepare lists every omitted object and reason before **Continue with warnings**. Objects remain in Blender, and exclusions appear in the preparation report. At least one valid object is required. This does not bypass compiler failures or guarantee that all topology will compile.
+
+**Scan existing shaders** populates the **Existing Halo shader** dropdown from installed .shader tags. Assignment links the active Blender material to an existing game shader; it does not create a shader or replace preview textures. Manual path entry remains optional. **Static model** means geometry-only importing; it is not an error.
+
+**Export to Sapien** currently supports Halo 3. Halo: Reach is marked not available yet and cannot start a build. Reach assets may still be converted into a Halo 3 level.

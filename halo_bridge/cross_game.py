@@ -57,11 +57,11 @@ def save_pixels(data,path,color=False):
     finally:bpy.data.images.remove(image)
 
 
-def prepare(objects,folder,progress=None):
+def prepare(objects,folder,progress=None,materials=None):
     progress=progress or (lambda message:None)
     folder=Path(folder);folder.mkdir(parents=True,exist_ok=True)
     result={};issues=[]
-    materials=reach_materials(objects)
+    materials=reach_materials(objects) if materials is None else materials
     for index,(pointer,mat) in enumerate(materials.items(),1):
         progress(f'Converting Reach material {index}/{len(materials)}: '+mat.get('hb_label',mat.name))
         try:

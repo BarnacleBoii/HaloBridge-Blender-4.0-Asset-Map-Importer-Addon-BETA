@@ -90,7 +90,7 @@ def indexed_assets(index):
     for row in index['assets']:
         a = dict(row)
         a.update(id=stable_id(str(path).lower(),a['tag'],a['section'],a.get('scenery_tag','')),map=str(path),
-                 level=path.stem,category='Materials' if a['kind']=='material' else category(a['name']),game=index.get('game','halo3'),status='Preview only; choose a scenery or instance source to export' if a['kind']=='model' else 'Ready to extract')
+                 level=path.stem,category='Materials' if a['kind']=='material' else category(a['name']),game=index.get('game','halo3'),status='Static geometry; animation and gameplay are not imported' if a['kind']=='model' else 'Ready to extract')
         result.append(a)
     return result
 

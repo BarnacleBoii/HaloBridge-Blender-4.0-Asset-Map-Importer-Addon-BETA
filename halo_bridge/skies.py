@@ -12,7 +12,7 @@ def items(settings,context):
         rows=data.get('items',[]) if data.get('kit')==settings.kit else []
         entries=[('AUTO','Original map / default sky','Use the imported map sky, or the starter sky for an authored level',0)]
         for row in rows:
-            name=row['scenario'];entries.append((name,row['name']+' ('+name.replace('\\','/')+')','Primary sky: '+', '.join(row['skies']),(zlib.crc32(name.encode())&0x3fffffff)+1))
+            name=row['scenario'];entries.append((name,row['name'],name+' — Primary sky: '+', '.join(row['skies']),(zlib.crc32(name.encode())&0x3fffffff)+1))
         _cache[key]=entries
     return _cache[key]
 

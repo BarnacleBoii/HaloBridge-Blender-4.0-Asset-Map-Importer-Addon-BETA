@@ -30,17 +30,17 @@ Steam's tool-installation options are described in the [official MCC Creator Hub
 
 ## Download
 
-Open the [v0.8.4 release](https://github.com/barnacleboii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases/tag/v0.8.4). Under **Assets**, choose **HaloBridge-0.8.4.zip**.
+Open the [v0.8.5 release](https://github.com/barnacleboii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases/tag/v0.8.5). Under **Assets**, choose **HaloBridge-0.8.5.zip**.
 
 | Download | Purpose |
 | --- | --- |
-| `HaloBridge-0.8.4.zip` | Install this as a Blender 4.0 addon |
-| `HaloBridge-0.8.4-source.zip` | Developers ONLY, source and build instructions for contributors |
+| `HaloBridge-0.8.5.zip` | Install this as a Blender 4.0 addon |
+| `HaloBridge-0.8.5-source.zip` | Developers ONLY, source and build instructions for contributors |
 
 ## Install in Blender
 
 1. Save project. In Blender, open **Edit → Preferences → Add-ons → Install**.
-2. Select `HaloBridge-0.8.4.zip` without unzipping it.
+2. Select `HaloBridge-0.8.5.zip` without unzipping it.
 3. Enable **HaloBridge - Blender 4.0 Importing** and the required Halo exporter.
 4. In a 3D View, press **N** and open **HaloBridge**.
 5. Choose **Detect folders**, inspect the two game folder paths, and choose **Check setup**. If detection misses an installation, choose its folders manually.

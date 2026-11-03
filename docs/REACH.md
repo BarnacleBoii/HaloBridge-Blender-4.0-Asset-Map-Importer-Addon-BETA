@@ -4,7 +4,7 @@
 
 ## Setup
 
-Install MCC's **Halo: Reach game content** for the `.map` files. **Halo: Reach Mod Tools - MCC (HREK)** is a separate Steam Tools installation expected by the current setup checker. Reach extraction reads MCC maps and does not require extracted HREK tags. To prepare these assets for Halo 3 Sapien, install **H3EK and extract its Halo 3 tags**. See [requirements by workflow](INSTALLATION.md#mcc-maps-versus-mod-tools).
+Install MCC's **Halo: Reach game content** for the `.map` files. **Halo: Reach Mod Tools - MCC (HREK)** is a separate Steam Tools installation expected by the current setup checker. Reach extraction reads MCC maps and does not require extracted HREK tags. To prepare these assets for Halo 3 Sapien, install **H3EK and extract its Halo 3 tags**. See [requirements by workflow](INSTALLATION.md#requirements).
 
 1. Select **(Experimental) Halo Reach** above Folders and Setup.
 2. Choose **Detect folders**. Verify **Reach Editing Kit** points to HREK and **Reach maps** points to MCC's haloreach/maps directory.
