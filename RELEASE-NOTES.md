@@ -1,3 +1,5 @@
+![HaloBridge — Blender importer addon](https://raw.githubusercontent.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/main/docs/halobridgelogo.png)
+
 # HaloBridge v0.8.4 — Beta
 
 Import MCC Halo 3 assets and original map layouts into Blender 4.0. Browse, preview and place assets, edit your scene, and experimentally prepare current static geometry for Halo 3 Sapien. Experimental Halo: Reach importing and static conversion into Halo 3 are included.

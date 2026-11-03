@@ -15,7 +15,8 @@ PRIVATE_NAMES={'catalogue.json','preview.json','stamp.json','collision.json','ma
 
 def audit(name,data):
     path=Path(name)
-    if path.suffix.lower() in FORBIDDEN or path.name in PRIVATE_NAMES or path.name.lower() in ('xcompress32.dll','xcompress64.dll'):
+    is_project_logo = name.replace('\\', '/') in {'docs/halobridgelogo.png', 'halo_bridge/docs/halobridgelogo.png'}
+    if (path.suffix.lower() in FORBIDDEN and not is_project_logo) or path.name in PRIVATE_NAMES or path.name.lower() in ('xcompress32.dll','xcompress64.dll'):
         raise ValueError('Private or unsupported content in archive: '+name)
     # Scan text and binary contents for the build user's absolute home path.
     home=str(Path.home())
