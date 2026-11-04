@@ -13,12 +13,6 @@ A Blender 4.0 Addon that allows Quickly Importing Halo:MCC fully textured static
 ### [Open HaloBridge Releases →](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases)
 
 Open the latest release, expand **Assets**, and download **HaloBridge-<version>.zip** to install in Blender. You only need the installable add-on ZIP.
-
-| File | What it is for |
-| --- | --- |
-| `HaloBridge-<version>.zip` | Blender add-on, including the compiled helpers |
-| `HaloBridge-<version>-source.zip` | Matching source for developers and contributors |
-
 GitHub's automatic **Source code** ZIP/TAR downloads are for development and do not include the compiled helpers needed to run the add-on.
 
 Follow the [installation guide](docs/INSTALLATION.md) for requirements and setup. **Draft releases are review builds and are not available as published downloads.**
@@ -42,21 +36,24 @@ See [Reach setup and limitations](docs/REACH.md).
 ## Requirements
 
 **MCC game files and Mod Tools are separate requirements.** Install MCC Halo 3 for its `.map` files. For the full Halo 3 placement/Sapien workflow, also install **Halo 3 Mod Tools - MCC (H3EK)** and extract its supplied tag/data archives. The Editing Kit alone does not replace the MCC maps installation.
+**For Reach imports, install MCC Halo: Reach. The current Reach setup checker also expects **Halo: Reach Mod Tools - MCC (HREK)**, but asset extraction does not require extracted HREK tags. Preparing Reach assets for Halo 3 still requires **H3EK with extracted Halo 3 tags**, not Reach Sapien. See [which files each workflow needs](docs/INSTALLATION.md#requirements).
 
-For Reach imports, install MCC Halo: Reach. The current Reach setup checker also expects **Halo: Reach Mod Tools - MCC (HREK)**, but asset extraction does not require extracted HREK tags. Preparing Reach assets for Halo 3 still requires **H3EK with extracted Halo 3 tags**, not Reach Sapien. See [which files each workflow needs](docs/INSTALLATION.md#requirements).
-
-
-- Windows x64 and **Blender 4.0** (tested with 4.0.0).
-- Your own installed **MCC Halo 3** map files; MCC **Halo: Reach** is optional for experimental Reach imports. Keep resource maps alongside level maps.
-- **.NET 10 Windows x64 Desktop Runtime** for the extraction helper.
-- For Halo 3 Sapien preparation: **Halo 3 Editing Kit with extracted tags**, **.NET Framework 4.8+**, and **Halo Asset Blender Development Toolset 2.364.0 (v364)** enabled in Blender.
+| Component | Required version / setup |
+| --- | --- |
+| Windows | 64-bit Windows; other operating systems are not supported |
+| Blender | 4.0; tested with 4.0.0 |
+| MCC Halo 3 | Locally installed PC game, including the complete `halo3/maps` directory and resource maps |
+| Halo 3 Editing Kit | Tool, Sapien and extracted tag archives; test the kit independently first |
+| [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **2.364.0 (v364)** installed and enabled; other exporter versions are rejected |
+| [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) | **10**, Windows **x64** Desktop Runtime, not only the base .NET runtime |
+| [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8 or newer** |
 
 See [installation](docs/INSTALLATION.md) for dependency links, folder setup and update instructions. No game maps, models, textures, tags or Editing Kit binaries are bundled.
 
-## Start here
+## Getting Started
 
-1. Install the [requirements and add-on](docs/INSTALLATION.md).
-2. Open **3D View → N sidebar → HaloBridge**, choose **Detect folders**, then **Check setup**.
+1. After Installing the [requirements and add-on](docs/INSTALLATION.md).
+2. Open Blender, Open **3D View → Press "N"(key) for viewport sidebar on the right of viewport → HaloBridge**, choose **Detect folders**, then **Check setup**.
 3. Enter a map filename such as `010_jungle.map` and choose **Import Map Assets**.
 4. Turn **Preview Mode** on, select an asset, and choose **Place asset(s)**.
 5. Build a small scene and follow the [first-map tutorial](docs/FIRST-MAP.md) to test it in Sapien.
@@ -69,8 +66,6 @@ You do not need a separate Reclaimer installation, Osoyoos, or a manually extrac
 
 Some assets are missing or approximate, and invalid or oversized geometry can fail Halo's compiler. Preview materials are approximations; Halo 3 exports use installed shader tags, while Reach exports generate simplified Halo 3 shaders from preview textures. Large Project Reclaimer maps and multiplayer packaging need further testing. Start with a small level and keep your saved work.
 
-Tested locally with Blender 4.0.0 and Halo exporter 2.364.0. A Shrine scene has compiled and opened in Sapien player simulation; a second clean PC and broad map compatibility have **not** been verified. See [verification history](TESTING.md) and [known limits](docs/LIMITATIONS.md).
-
 ## Guides
 
 | Guide | Covers |
@@ -82,9 +77,9 @@ Tested locally with Blender 4.0.0 and Halo exporter 2.364.0. A Shrine scene has 
 | [How HaloBridge works](docs/HOW-IT-WORKS.md) | Extraction, cache, geometry export and scenario preparation |
 | [Limits and roadmap](docs/LIMITATIONS.md) | Supported scope and areas that need community testing |
 
-## Community
+## Bug Reports/Feedback/Suggestions
 
-[Report a bug or request a feature](https://github.com/barnacleboii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/issues/new/choose). Include your version, steps to reproduce, and sanitized error text. Please do not upload game maps, tags, extracted assets, caches, or Blender files containing game content.
+[Report a bug or request a feature](https://github.com/barnacleboii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/issues/new/choose). Include your version, steps to reproduce, and sanitized error text.
 
 Code and documentation contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). The release includes both the installable add-on and matching source archive.
 
