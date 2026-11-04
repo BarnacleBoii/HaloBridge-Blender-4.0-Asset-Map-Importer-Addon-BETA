@@ -1,6 +1,7 @@
 """Existing shader dropdown, populated explicitly rather than during redraw."""
 from pathlib import Path
 import zlib
+from . import games
 _cache={}
 _retired=[]
 _empty=[('NONE','Scan existing shaders first','Scan the Editing Kit to choose an existing shader',0)]
@@ -14,9 +15,9 @@ def group(path):
     return 'Shared/'+('/'.join(parts[:2]) if parts[0]=='objects' else parts[0])
 
 def level_items(settings,context):
-    return _cache.get(settings.kit,{}).get('levels',_empty_levels)
+    return _cache.get(games.destination(settings).kit,{}).get('levels',_empty_levels)
 def items(settings,context):
-    data=_cache.get(settings.kit)
+    data=_cache.get(games.destination(settings).kit)
     if not data:return _empty
     return data['groups'].get(getattr(settings,'shader_level','ALL'),data['groups']['ALL'])
 

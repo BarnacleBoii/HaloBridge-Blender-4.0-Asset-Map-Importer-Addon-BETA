@@ -1,5 +1,6 @@
 """Export current evaluated meshes as static test geometry, never a donor BSP."""
 import hashlib
+from collections import Counter
 from pathlib import Path
 import bpy
 from mathutils import Vector, Matrix
@@ -95,19 +96,31 @@ def export(config,path,progress=None):
                     bm=bmesh.new();bm.from_mesh(mesh)
                     bmesh.ops.delete(bm,geom=[f for f in bm.faces if f.material_index in sky_slots],context='FACES')
                     bm.to_mesh(mesh);bm.free()
+                # Open imported render meshes are surfaces, not sealed volumes.
+                # Halo's one-sided transparent geometry flag permits open collision
+                # edges without duplicating render faces or changing shader alpha.
+                edge_uses=Counter(edge for face in mesh.polygons for edge in face.edge_keys)
+                open_surface=any(count!=2 for count in edge_uses.values())
                 # Leaf cards must not become solid collision solely because they render.
                 for i,mat in enumerate(list(mesh.materials)):
                     if mat:
-                        mk=mat.as_pointer()
-                        if mk not in material_cache:
-                            copy=mat.copy();materials.append(copy);material_cache[mk]=copy
+                        mk=mat.as_pointer();material_key=(mk,open_surface)
+                        if material_key not in material_cache:
+                            copy=mat.copy();materials.append(copy);material_cache[material_key]=copy
                             if mk in converted:copy["hb_shader"]=converted[mk]["name"]
                             shader=aliases.get(mat.get('hb_shader','').replace('/','\\'),{}).get('source')
                             copy.ass_jms.render_only=collision_policy.render_only(mat,shader,mat.get('hb_shader',''))
                             copy.ass_jms.collision_only=False
                             if copy.ass_jms.render_only:progress('Render-only material (no generated collision): '+mat.name)
-                            if not mat.name.startswith('+'):copy.ass_jms.two_sided=True
-                        mesh.materials[i]=material_cache[mk]
+                            # Preserve explicit Halo sidedness. Imported alpha cards
+                            # already display both sides when backface culling is off.
+                            # Opaque viewport defaults alone do not request duplication.
+                            if not mat.name.startswith('+'):
+                                copy.ass_jms.two_sided=bool(mat.ass_jms.two_sided or
+                                    (mat.blend_method!='OPAQUE' and not mat.use_backface_culling))
+                                if open_surface and not copy.ass_jms.two_sided and not copy.ass_jms.transparent_2_sided and not copy.ass_jms.render_only:
+                                    copy.ass_jms.transparent_1_sided=True
+                        mesh.materials[i]=material_cache[material_key]
                         if mk in converted and mesh.uv_layers.active:
                             u,v=converted[mk]["tiling"]
                             for face in mesh.polygons:

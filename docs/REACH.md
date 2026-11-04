@@ -8,7 +8,7 @@ Install MCC's **Halo: Reach game content** for the `.map` files. **Halo: Reach M
 
 1. Select **(Experimental) Halo Reach** above Folders and Setup.
 2. Choose **Detect folders**. Verify **Reach Editing Kit** points to HREK and **Reach maps** points to MCC's haloreach/maps directory.
-3. Choose **Check setup**. The extraction helper requires .NET 10 Desktop Runtime x64. Reach previews do not use the Halo 3 exporter or collision helper.
+3. Choose **Check setup**. The extraction helper requires .NET 10 Desktop Runtime x64. Install the supported Halo Blender toolset too; HaloBridge checks it for asset placement and scene export.
 4. Enter a filename such as **70_boneyard.map** and choose **Import Map Assets**.
 5. Use search, filters, Preview Mode and Place asset(s), or **Import entire .map** for available terrain and static placements in original positions.
 
@@ -19,8 +19,8 @@ Halo 3 storage is preserved. Reach defaults to Documents/HaloBridge/reach. Each 
 ## Use Reach assets in Halo 3 Sapien
 
 1. Keep your imported Reach objects in the current Blender scene and edit/place them normally.
-2. Switch **Import game** to **Halo 3**. This changes the catalogue and folders; it keeps your scene objects.
-3. Verify the editing kit is **H3EK**, enter your output level name, and choose a Halo 3 sky.
+2. Keep **Import game** on Reach and choose **Halo 3** under **Export to Sapien**.
+3. Verify **Halo 3 export Editing Kit** is **H3EK** (leave blank to use saved/detected Halo 3 folders), enter your output level name, and choose a Halo 3 sky.
 4. Click **Prepare current scene for sapien**, review the static-geometry warning, and continue.
 
 The export uses current meshes and transforms, including edits and modifiers. It generates collision from their surfaces and builds Halo 3 bitmap and shader tags in the output level folder. Diffuse textures, normal textures, UV tiling and cutout alpha are supported. Existing Reach imports are detected from their object metadata; reimporting is unnecessary. An explicitly assigned Halo 3 shader overrides conversion.
@@ -38,3 +38,9 @@ Boneyard indexed 838 instance assets, 851 materials, 320 models and 28 scenery e
 ## Conversion verification in 0.8.0
 
 A real Boneyard instance and Halo 3 test ground compiled into a separate Halo 3 scenario. Repeat preparation with a cutout variant passed. Readback verified three instance definitions and 84 generated collision surfaces; shader tags referenced converted base, normal and alpha bitmaps and the cutout template. Automated Blender tests verified source UV/material preservation, texture conversion, tiled export UVs, edited meshes and sky selection. This does not establish full-map performance or multiplayer/Project Reclaimer compatibility.
+
+## Shared interface and export destination
+
+Reach uses the same browser, preview, multi-object swap, material/collision, sky, diagnostics and preparation panels as Halo 3. You do not need to switch the import game back to Halo 3 before preparing. The import game controls the source maps and catalogue; the export destination controls shaders, skies, starter shell, compiler and Sapien. The starter shell still uses Halo 3 Jungle assets and requires that map.
+
+Halo 3 is the only implemented Sapien destination. Reach geometry and preview materials use the existing experimental static conversion route. Original Reach vehicle behavior, animation and collision-tag conversion are not implemented. Halo CE, Halo 2, ODST and Halo 4 are reserved in the capability registry but are not enabled: they need extraction/conversion adapters and validation first.

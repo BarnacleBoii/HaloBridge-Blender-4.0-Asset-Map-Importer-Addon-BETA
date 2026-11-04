@@ -51,7 +51,8 @@ with tempfile.TemporaryDirectory() as tmp:
     assert (added[0].location-added[1].location).length<1e-6
     assert (added[0].location-bpy.context.scene.cursor.location).length<1e-6
     # Replace the viewport object using the highlighted list entry.
-    old=added[0];bpy.context.view_layer.objects.active=old
+    bpy.ops.object.select_all(action="DESELECT")
+    old=added[0];old.select_set(True);bpy.context.view_layer.objects.active=old
     old.location=(3,7,9);bpy.context.view_layer.update()
     matrix=old.matrix_world.copy();identity=old['hb_id']
     s.active_index=2
@@ -60,9 +61,10 @@ with tempfile.TemporaryDirectory() as tmp:
     assert target['hb_asset_id']=='2' and target['hb_id']==identity
     assert all(abs(target.matrix_world[r][c]-matrix[r][c])<1e-5 for r in range(4) for c in range(4))
     assert 'materials' in ui.replacement_target(bpy.context,assets[3])[1]
+    bpy.ops.object.select_all(action="DESELECT")
     bpy.context.view_layer.objects.active=None
     assert '3D View' in ui.replacement_target(bpy.context,assets[0])[1]
-    bpy.context.view_layer.objects.active=target
+    target.select_set(True);bpy.context.view_layer.objects.active=target
     # Batch materials load without changing the selected mesh.
     for a in s.assets:a.checked=a.asset_id=='mat'
     old_slots=list(target.data.materials)
@@ -132,6 +134,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert 'Texture data not found' in bpy.data.texts['HaloBridge diagnostics'].as_string()
     # Materials load without a selected receiving mesh.
     ui.jobs.extract=lambda asset,cfg,cancel:preview
+    bpy.ops.object.select_all(action="DESELECT")
     bpy.context.view_layer.objects.active=None
     for a in s.assets:a.checked=a.asset_id=='mat'
     bpy.ops.halo_bridge.place();wait()

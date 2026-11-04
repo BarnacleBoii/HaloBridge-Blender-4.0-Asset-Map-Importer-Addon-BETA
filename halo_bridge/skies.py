@@ -2,10 +2,12 @@
 from pathlib import Path
 from .catalog import read_json
 import zlib
+from . import games
 _cache={}
 _retired=[]
 
 def items(settings,context):
+    settings=games.destination(settings)
     key=(settings.kit,settings.cache)
     if key not in _cache:
         data=read_json(Path(settings.cache)/'sky-catalogue.json',{}) if settings.cache else {}

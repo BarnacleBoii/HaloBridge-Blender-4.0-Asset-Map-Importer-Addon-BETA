@@ -4,7 +4,7 @@
 
 A Blender 4.0 Addon that allows Quickly Importing Halo:MCC fully textured static game assets and entire .maps full textured into Blender, and an experimental option to prepare the current blender scene for a Halo 3 Sapien test level. Currently Supports Halo 3,Halo Reach. more planned.
 (Coded with Chat GPT 6 Astra, guided by user input)
-**v0.8.9 · Beta preview · Windows x64 · Blender 4.0**
+**v0.9 · Beta preview · Windows x64 · Blender 4.0**
 
 **[Releases and Downloads](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases)** · **[Installation](docs/INSTALLATION.md)** · **[First map tutorial](docs/FIRST-MAP.md)** · **[Feature guide](docs/FEATURES.md)** · **[Troubleshooting](docs/TROUBLESHOOTING.md)**
 
@@ -18,20 +18,19 @@ GitHub's automatic **Source code** ZIP/TAR downloads are for development and do 
 Follow the [installation guide](docs/INSTALLATION.md) for requirements and setup. **Draft releases are review builds and are not available as published downloads.**
 
 
-## New in v0.8.9
+## New in v0.9
 
-This release includes the updates from v0.8.6 through v0.8.9:
+- Shared Halo 3/Reach menus, including material, sky, collision and preparation controls.
+- Prepare Reach assets for Halo 3 without switching import games.
+- Swap multiple greybox cubes or placed objects for a chosen asset, using its original scale.
+- Single-sided terrain export and improved handling of open collision surfaces.
+- Diagnostic reports open at the top and identify the main Blender structure behind cluster errors.
 
-- **Original Halo 3 vehicles:** match an imported vehicle model to its installed vehicle tag, retaining the original game collision and behavior instead of exporting a static mesh.
-- **Foliage collision fixes:** recognized leaf materials stay visible without becoming solid collision. Per-material collision choices handle other cases.
-- **Live preparation logs:** build stages, asset counts, elapsed time, CPU/memory activity and compiler output. Remaining time is shown as unknown when Halo does not report it.
-- **Clearer controls:** separated material/sky/preparation sections, highlighted import/preparation buttons, and prominent errors, warnings and conflict actions.
-
-See the [full release notes](RELEASE-NOTES.md), [vehicle instructions](docs/FEATURES.md#original-halo-3-vehicles), and [troubleshooting guide](docs/TROUBLESHOOTING.md). Save and restart Blender when updating; keep your cache and project records.
+See the [release notes](RELEASE-NOTES.md) for changes, validation and remaining limits. Save and restart Blender when updating; keep your cache and project records.
 
 ## Halo 3 and Halo: Reach
 
-Use **Import game**, above **Folders and Setup**, to select **Halo 3** or **Halo: Reach**. Each game remembers its folders, map filename, storage and catalogue. Save the blend file to retain these settings. Switching does not delete scene objects. Reach assets can share a scene with Halo 3 assets. Switch **Import game** back to **Halo 3**, verify H3EK, then use **Prepare current scene for sapien**. Reach meshes are converted to static Halo 3 geometry with generated collision and converted preview textures. Existing Reach objects do not need reimporting. See [Reach conversion](docs/REACH.md).
+Use **Import game**, above **Folders and Setup**, to select **Halo 3** or **Halo: Reach**. Each game remembers its folders, map filename, storage and catalogue. Save the blend file to retain these settings. Switching does not delete scene objects. Reach assets can share a scene with Halo 3 assets. Keep either import game selected, choose **Halo 3** as the Sapien destination, verify H3EK, then use **Prepare current scene for sapien**. Reach meshes are converted to static Halo 3 geometry with generated collision and converted preview textures. Existing Reach objects do not need reimporting. See [Reach conversion](docs/REACH.md).
 
 See [Reach setup and limitations](docs/REACH.md).
 

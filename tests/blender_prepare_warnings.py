@@ -24,7 +24,7 @@ with patch.object(ui,'record_failure') as failure:
 
 operator=SimpleNamespace(token=pending['token'],accept=True)
 prepare=Mock(return_value={'FINISHED'})
-with patch.object(ui,'config',return_value=cfg),patch.object(ui,'preparation_warnings',return_value=issues),patch.object(ui.HBPrepare,'run',prepare):
+with patch.object(ui,'export_config',return_value=cfg),patch.object(ui,'preparation_warnings',return_value=issues),patch.object(ui.HBPrepare,'run',prepare):
     assert ui.HBConfirmPrepare.run(operator,context)=={'FINISHED'}
     prepare.assert_called_once_with(operator,context,warnings_accepted=True)
 assert ui._pending_prepare_warning is None
@@ -36,7 +36,7 @@ assert ui._pending_prepare_warning is None and not ui._prepare_running
 
 ui.confirm_map_warnings(context,cfg,ValidationError(issues))
 operator.token=ui._pending_prepare_warning['token'];operator.accept=True
-with patch.object(ui,'config',return_value={'level':'different_level'}):
+with patch.object(ui,'export_config',return_value={'level':'different_level'}):
     try:ui.HBConfirmPrepare.run(operator,context)
     except RuntimeError as e:assert 'scene or setup changed' in str(e)
     else:raise AssertionError('Changed configuration bypassed confirmation')
@@ -49,7 +49,7 @@ operator.bl_idname='halo_bridge.confirm_prepare';operator.report=Mock()
 operator.run=lambda ctx:ui.HBConfirmPrepare.run(operator,ctx)
 errors=['Plane: assign an existing Halo shader.','Plane.002: assign an existing Halo shader.','Plane.003: assign an existing Halo shader.']
 failure=ValidationError(errors)
-with patch.object(ui,'config',return_value=cfg),patch.object(ui,'preparation_warnings',return_value=issues),patch.object(ui.HBPrepare,'run',side_effect=failure),patch.object(ui,'record_failure',return_value=errors) as recorder:
+with patch.object(ui,'export_config',return_value=cfg),patch.object(ui,'preparation_warnings',return_value=issues),patch.object(ui.HBPrepare,'run',side_effect=failure),patch.object(ui,'record_failure',return_value=errors) as recorder:
     assert ui.Guard.execute(operator,context)=={'CANCELLED'}
     recorder.assert_called_once()
     assert recorder.call_args.args[0] is failure

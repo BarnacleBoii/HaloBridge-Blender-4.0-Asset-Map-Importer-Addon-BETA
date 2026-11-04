@@ -25,7 +25,12 @@ with tempfile.TemporaryDirectory() as tmp:
     def inspect(config,path):
         objects=list(bpy.context.scene.objects);meshes=[o for o in objects if o.name.lstrip('%').startswith('hb_')]
         assert len(meshes)==3 and len(objects)==4
+        assert all(o.data.materials[0].ass_jms.two_sided==expected_sidedness for o in meshes)
         assert len([o for o in meshes if not o.name.startswith('%')])==1
+        ground=next(o for o in meshes if config['geometry_names'][o.name.lstrip('%').split('.')[0]]==underground.name)
+        assert ground.data.materials[0].ass_jms.transparent_1_sided== (not expected_sidedness)
+        closed=next(o for o in meshes if config['geometry_names'][o.name.lstrip('%').split('.')[0]]==source.name)
+        assert not closed.data.materials[0].ass_jms.transparent_1_sided
         assert config['structure_source'] in {source.name,other.name,underground.name}
         assert all(tuple(o.scale)==(1,1,1) for o in objects)
         assert abs(min(v.co.x for v in meshes[0].data.vertices)+3.75)<1e-5
@@ -36,8 +41,13 @@ with tempfile.TemporaryDirectory() as tmp:
         return []
     # Shader paths written by extraction are canonical backslashes.
     material['hb_shader']='test\\ground'
+    expected_sidedness=False
     messages=[]
     with patch.object(blender_ops,'export_scene',side_effect=inspect):geometry_export.export(cfg,root/'test.ass',progress=messages.append)
+    for explicit,blend,culling,expected_sidedness in [(False,'CLIP',False,True),(False,'CLIP',True,False),(True,'OPAQUE',True,True)]:
+        material.ass_jms.two_sided=explicit;material.blend_method=blend;material.use_backface_culling=culling
+        with patch.object(blender_ops,'export_scene',side_effect=inspect):geometry_export.export(cfg,root/'test.ass')
+        assert material.ass_jms.two_sided==explicit
     assert any('Preparing asset 3/3:' in message for message in messages)
     assert any(source.name in message for message in messages)
     assert 'Writing geometry file' in messages[-1]

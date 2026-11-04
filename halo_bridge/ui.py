@@ -14,6 +14,7 @@ from . import jobs, build, blender_ops, setup, map_scene, navigation, map_export
 from .diagnostics import ValidationError
 from . import source_names,export_review,shader_choices,vehicles
 from .progress import PreparationActivity
+from . import games
 
 def record_failure(error, details=None):
     global _error,_message,_reported_issues
@@ -57,7 +58,7 @@ _task=None
 _preview_generation=0
 _preview_pending=None
 _error=''
-_message='Connect your folders, then index a Halo 3 map to browse its assets.'
+_message='Connect your folders, then index a map to browse its assets.'
 
 class HBAsset(bpy.types.PropertyGroup):
     asset_id:StringProperty()
@@ -141,18 +142,21 @@ def game_changed(settings,context):
     if not context:return
     stop_preview(context)
     profiles=json.loads(settings.game_profiles or '{}')
-    keys=('kit','maps','cache','map_name','level','sky_scenario')
+    keys=('kit','maps','cache','map_name')
     profiles[settings.previous_game]={k:getattr(settings,k) for k in keys}
-    chosen=profiles.get(settings.game) or dict(detect_paths(settings.game),map_name='70_boneyard.map' if settings.game=='reach' else '010_jungle.map',level='hb_reach_map' if settings.game=='reach' else 'hb_jungle_map')
+    chosen=profiles.get(settings.game) or dict(detect_paths(settings.game),map_name=games.GAMES[settings.game]['map_name'])
     for key in keys:setattr(settings,key,chosen.get(key,''))
-    settings.sky_choice='AUTO';settings.game_profiles=json.dumps(profiles);settings.previous_game=settings.game
+    if settings.game==settings.export_target and settings.export_kit:
+        settings.kit=settings.export_kit;settings.export_kit=''
+    settings.shader_choice='NONE';settings.shader_level='ALL';settings.game_profiles=json.dumps(profiles);settings.previous_game=settings.game
     _catalogue_path=None;_level_items_token=None
     _catalogue=read_json(Path(bpy.path.abspath(settings.cache))/'catalogue.json',{'version':1,'assets':[]})
     refresh(context,persist=False)
 
 
 class HBSettings(bpy.types.PropertyGroup):
-    game:EnumProperty(name='Import game',items=[('halo3','Halo 3','Import and experimental Sapien preparation'),('reach','(Experimental) Halo Reach','Import Reach assets; switch to Halo 3 to prepare the mixed scene for Halo 3 Sapien')],default='halo3',update=game_changed)
+    game:EnumProperty(name='Import game',items=games.IMPORT_ITEMS,default='halo3',update=game_changed)
+    export_kit:StringProperty(name='Halo 3 export Editing Kit',subtype='DIR_PATH',description='Halo 3 destination for preparing this scene while browsing another game; blank uses your saved Halo 3 folders or detected installation')
     previous_game:StringProperty(default='halo3')
     game_profiles:StringProperty(default='{}')
     kit:StringProperty(name='Halo 3 Editing Kit',subtype='DIR_PATH',description='Editing Kit folder containing tool.exe, sapien.exe, and your editable tags')
@@ -200,6 +204,14 @@ def config(context):
     if s.sky_selected!='AUTO':result['sky_scenario']=s.sky_selected
     elif s.sky_choice and s.sky_choice!='AUTO':result['sky_scenario']=s.sky_choice
     return result
+
+def export_config(context):
+    result=config(context);target=games.destination(context.scene.halo_bridge)
+    if not games.GAMES[target.game]['sapien_enabled']:
+        raise RuntimeError('Sapien export for '+games.GAMES[target.game]['label']+' is not implemented. Choose Halo 3 to prepare mixed-game assets.')
+    result.update(game=target.game,kit=bpy.path.abspath(target.kit),maps=bpy.path.abspath(target.maps),cache=bpy.path.abspath(target.cache))
+    return result
+
 
 def ensure_catalogue(context,force=False):
     global _catalogue,_catalogue_path
@@ -436,9 +448,8 @@ class HBCheckSetup(Guard,bpy.types.Operator):
         global _message,_error
         issues=setup.check(config(context),Path(__file__).parent)
         if bpy.app.version[:2]!=(4,0):issues.append('This alpha is tested with Blender 4.0; other versions are not supported yet.')
-        if context.scene.halo_bridge.game=='halo3':
-            try:blender_ops.ensure_exporter()
-            except Exception as e:issues.append(str(e))
+        try:blender_ops.ensure_exporter()
+        except Exception as e:issues.append(str(e))
         text=bpy.data.texts.get('HaloBridge diagnostics') or bpy.data.texts.new('HaloBridge diagnostics')
         text.clear();text.write('\n\n'.join(issues) if issues else 'Setup checks passed. Index a map to begin.')
         _error='\n'.join(issues)
@@ -476,13 +487,53 @@ class HBIndex(Guard,bpy.types.Operator):
         start(context,lambda cancel:jobs.helper('extractor',dict(operation='index',game=cfg['game'],map=str(mp),output=str(out)),Path(cfg['cache'])/'jobs',cancel),done,'Reading map asset index…')
 
 def replacement_target(context,asset):
-    target=context.active_object
-    if target and target.get('hb_preview'):target=context.scene.halo_bridge.preview_previous_object
-    if not target or target.get('hb_preview') or not target.get('hb_asset_id'):
-        return None,'Select a placed HaloBridge object in the 3D View first.'
-    if asset['kind'] not in ('instance','scenery'):
-        return None,'Choose a tree, rock or other asset listed as instance or scenery; materials and raw models cannot replace objects.'
-    return target,''
+    targets=[o for o in context.selected_objects if not o.get('hb_preview')]
+    if not targets and context.active_object and context.active_object.get('hb_preview'):
+        previous=context.scene.halo_bridge.preview_previous_object
+        if previous and not previous.get('hb_preview'):targets=[previous]
+    if not targets:return [],'Select one or more objects in the 3D View first.'
+    if context.mode!='OBJECT':return [],'Switch to Object Mode before swapping objects.'
+    if any(o.library or o.override_library for o in targets):return [],'Selected objects must be editable; make linked objects local first.'
+    if asset['kind'] not in ('instance','scenery','model','legacy'):
+        return [],'Choose a geometry asset; materials cannot replace objects.'
+    return targets,''
+
+
+def swap_objects(context,targets,asset,path,cfg):
+    # Build every replacement before removing any original, so import errors
+    # leave the greybox intact. Snapshot transforms before parenting changes.
+    from mathutils import Matrix
+    snapshots=[(o,o.matrix_world.copy(),list(o.users_collection),o.parent,
+                [(child,child.matrix_world.copy()) for child in o.children]) for o in targets]
+    before=set(bpy.data.objects);created={};active=context.active_object
+    try:
+        for old,matrix,collections,parent,children in snapshots:
+            obj=blender_ops.place(asset,path,cfg);created[old]=obj;obj.asset_mark()
+            location,rotation,_=matrix.decompose()
+            obj.matrix_world=Matrix.LocRotScale(location,rotation,obj.scale.copy())
+            if old.get('hb_id'):obj['hb_id']=old['hb_id']
+            for col in collections:
+                if obj.name not in col.objects:col.objects.link(obj)
+            for col in list(obj.users_collection):
+                if col not in collections:col.objects.unlink(obj)
+    except Exception:
+        for obj in set(bpy.data.objects)-before:bpy.data.objects.remove(obj,do_unlink=True)
+        for old in targets:old.select_set(True)
+        context.view_layer.objects.active=active
+        raise
+    for old,matrix,collections,parent,children in snapshots:
+        obj=created[old];world=obj.matrix_world.copy()
+        obj.parent=created.get(parent,parent);obj.matrix_world=world
+        for child,world in children:
+            if child not in created:child.parent=obj;child.matrix_world=world
+        for entry in _catalogue['assets']:
+            if entry['id']==old.get('hb_asset_id') and entry['kind']=='legacy':entry['mapping']=dict(asset)
+    for old in targets:bpy.data.objects.remove(old,do_unlink=True)
+    for obj in context.selected_objects:obj.select_set(False)
+    for obj in created.values():obj.select_set(True)
+    context.view_layer.objects.active=created.get(active,next(iter(created.values())))
+    refresh(context)
+    return list(created.values())
 
 class HBPlace(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.place';bl_label='Place asset(s)'
@@ -493,7 +544,7 @@ class HBPlace(Guard,bpy.types.Operator):
     @classmethod
     def description(cls,context,properties):
         if properties.replace_selected:
-            return 'Replace the HaloBridge object selected in the 3D View with the highlighted asset from this list; keep its position, rotation, scale and placement identity'
+            return 'Swap all selected 3D View objects, including greybox cubes, for the highlighted asset; keep positions, rotations and collections, using the original asset import scale. Mesh edits and modifiers are replaced'
         if properties.preview_only:
             return 'Show a temporary preview of this asset; previews are excluded from level export'
         return cls.bl_description+'; checked entries take priority, otherwise uses the highlighted entry; turns Preview Mode off'
@@ -505,9 +556,9 @@ class HBPlace(Guard,bpy.types.Operator):
         # must retain plain values, never properties on self.
         preview_only=bool(self.preview_only);apply_material=bool(self.apply_material)
         if asset['game']!=cfg['game']:raise RuntimeError('Choose an asset indexed for the selected Halo game.')
-        old=None
+        targets=[]
         if self.replace_selected:
-            old,reason=replacement_target(context,asset)
+            targets,reason=replacement_target(context,asset)
             if reason:raise RuntimeError(reason)
         preview_matrix=None
         if not preview_only and not self.replace_selected and asset['kind']!='material':
@@ -545,19 +596,14 @@ class HBPlace(Guard,bpy.types.Operator):
                     show_preview(context,sphere,asset['name'])
                 _message='Material preview shown in viewport (excluded from export).' if preview_only else ('Applied ' if apply_material else 'Loaded material (no object changed): ')+asset['name']
                 return
+            if targets:
+                swapped=swap_objects(context,targets,asset,path,cfg)
+                _message=f'Swapped {len(swapped)} object(s) to '+asset['name']+'.'
+                return
             obj=blender_ops.place(asset,path,cfg)
             if preview_matrix is not None:
                 obj.data=obj.data.copy();map_scene.center_mesh_origin(obj.data);obj.matrix_world=preview_matrix
             obj.asset_mark()
-            if old and old.name in bpy.data.objects:
-                prior_id=old.get('hb_asset_id');matrix=old.matrix_world.copy();placement_id=old.get('hb_id')
-                if float(old.get('hb_working_units',1))!=float(obj.get('hb_working_units',1)):
-                    matrix=__import__('mathutils').Matrix.Scale(float(obj.get('hb_working_units',1))/float(old.get('hb_working_units',1)),4)@matrix
-                obj.matrix_world=matrix
-                if placement_id:obj['hb_id']=placement_id
-                for a in _catalogue['assets']:
-                    if a['id']==prior_id and a['kind']=='legacy':a['mapping']=dict(asset)
-                bpy.data.objects.remove(old,do_unlink=True);refresh(context)
             if preview_only:
                 # Native asset_generate_preview starts an asynchronous renderer.
                 # Unlinking its object immediately afterwards can crash Blender 4.0.
@@ -787,8 +833,7 @@ class HBGround(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.ground';bl_label='Create starter level shell template';bl_options={'REGISTER','UNDO'}
     bl_description='Add a closed test-level shell with a ground surface and sky boundaries as a starting point for your map'
     def run(self,context):
-        cfg=config(context)
-        if cfg['game']!='halo3':raise RuntimeError('The starter shell template currently requires Halo 3.')
+        cfg=export_config(context)
         mp=Path(cfg['maps'])/'010_jungle.map'
         if not mp.is_file():raise RuntimeError('The textured starter template needs 010_jungle.map. Check the Halo 3 maps folder.')
         asset=indexed_assets(dict(map=str(mp),assets=[dict(name='Jungle ground',tag='levels\\solo\\010_jungle\\shaders\\terrain\\terrain_000',kind='material',section=-1)]))[0]
@@ -803,7 +848,7 @@ class HBScanShaders(Guard,bpy.types.Operator):
     bl_description='List existing .shader tags from the selected Editing Kit; no new shaders are created'
     def run(self,context):
         global _message
-        _message='Found '+str(shader_choices.scan(context.scene.halo_bridge.kit))+' existing shaders.'
+        _message='Found '+str(shader_choices.scan(games.destination(context.scene.halo_bridge).kit))+' existing shaders.'
         context.scene.halo_bridge.shader_level='ALL'
         context.scene.halo_bridge.shader_choice='NONE'
 
@@ -829,8 +874,8 @@ class HBShader(Guard,bpy.types.Operator):
         settings=context.scene.halo_bridge
         tag=(settings.shader_path if settings.shader_manual else settings.shader_choice).replace('/','\\')
         if tag=='NONE':raise RuntimeError('Scan existing shaders and choose one first.')
-        export_review.shader_file(context.scene.halo_bridge.kit,tag);obj.active_material['hb_shader']=tag
-        obj.active_material['hb_shader_game']=context.scene.halo_bridge.game
+        export_review.shader_file(games.destination(settings).kit,tag);obj.active_material['hb_shader']=tag
+        obj.active_material['hb_shader_game']=settings.export_target
 
 _vehicle_items_cache={}
 
@@ -848,8 +893,7 @@ class HBFindVehicle(Guard,bpy.types.Operator):
     def run(self,context):
         obj=context.active_object
         if not obj or obj.type!='MESH':raise RuntimeError('Select the imported vehicle model in the 3D View first.')
-        vehicles.validate_preview(obj);cfg=config(context)
-        if cfg['game']!='halo3':raise RuntimeError('Switch Import game to Halo 3 first.')
+        vehicles.validate_preview(obj);cfg=export_config(context)
         name=obj.name;source=obj['hb_source_tag'];directory=Path(cfg['cache'])/'jobs';out=directory/('vehicle-matches-'+str(time.time_ns())+'.json')
         def done(result):
             global _message
@@ -907,10 +951,10 @@ class HBRefreshSkies(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.refresh_skies';bl_label='Find map skies'
     bl_description='Scan installed Editing Kit scenarios for usable sky references; includes maps beyond the current asset index'
     def run(self,context):
-        cfg=config(context);directory=Path(cfg['cache'])/'jobs';out=directory/('skies-'+str(time.time_ns())+'.json')
+        cfg=export_config(context);directory=Path(cfg['cache'])/'jobs';out=directory/('skies-'+str(time.time_ns())+'.json')
         def done(result):
             global _message
-            result['kit']=context.scene.halo_bridge.kit
+            result['kit']=cfg['kit']
             write_json(Path(cfg['cache'])/'sky-catalogue.json',result);skies.invalidate()
             _message='Found skies from '+str(len(result['items']))+' maps. Select one in Sky from map. Use Generate Test Lighting for Sapien Level during preparation.'
         start(context,lambda cancel:jobs.helper('tags',dict(operation='list_skies',kit=cfg['kit'],output=str(out)),directory,cancel),done,'Finding skies in Editing Kit maps...')
@@ -1029,7 +1073,7 @@ class HBConfirmPrepare(Guard,bpy.types.Operator):
         _pending_prepare_warning=None
         if not self.accept:
             _message='Preparation cancelled. No level files were written.';prepare_status(_message);return {'CANCELLED'}
-        if pending['scene']!=context.scene.as_pointer() or pending['config']!=config(context):
+        if pending['scene']!=context.scene.as_pointer() or pending['config']!=export_config(context):
             raise RuntimeError('The scene or setup changed. Prepare again to review current warnings.')
         current=preparation_warnings(context,pending['config'])
         if current!=pending['issues']:
@@ -1057,11 +1101,7 @@ class HBPrepare(Guard,bpy.types.Operator):
         if warnings_accepted is None:warnings_accepted=self.warnings_accepted
         prepare_status('Validating current scene...',True)
         reconcile_preview_copies(context)
-        cfg=config(context)
-        if cfg.get('export_target','halo3')!='halo3':
-            raise RuntimeError('Reach Sapien export is not implemented yet. Choose Halo 3; Reach assets can still be converted into a Halo 3 level.')
-        if cfg['game']!='halo3':
-            raise RuntimeError('Switch Import game to Halo 3 to choose the Halo 3 Editing Kit and prepare this scene. Your Reach objects stay in the scene and are converted automatically.')
+        cfg=export_config(context)
         safe_level(cfg['level']);build.ensure_sapien_closed()
         out=Path(cfg['cache'])/'projects'/cfg['level']/'export'/('level_'+str(__import__('time').time_ns())+'.ASS');out.parent.mkdir(parents=True,exist_ok=True)
         last_redraw=[0.0]
@@ -1127,7 +1167,7 @@ def open_sapien(cfg):
 class HBOpen(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.open';bl_label='Open in Sapien'
     bl_description='Launch Sapien with the successfully prepared scenario for this output level; prepare the level first'
-    def run(self,context):open_sapien(config(context))
+    def run(self,context):open_sapien(export_config(context))
 
 class HBResolve(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.resolve';bl_label='Resolve conflict: use Blender'
@@ -1137,7 +1177,7 @@ class HBResolve(Guard,bpy.types.Operator):
         self.layout.label(text='Next export will replace Sapien edits to Blender-owned placements.')
         self.layout.label(text='Sapien-owned objects and gameplay settings will be kept.')
     def run(self,context):
-        cfg=config(context);build.ensure_sapien_closed();safe_level(cfg['level'])
+        cfg=export_config(context);build.ensure_sapien_closed();safe_level(cfg['level'])
         path=Path(cfg['cache'])/'projects'/cfg['level']/'manifest.json';manifest=read_json(path)
         if not manifest:raise RuntimeError('No previously successful export for this level.')
         def done(result):
@@ -1170,7 +1210,14 @@ class HBDiagnostics(bpy.types.Operator):
     text_name:StringProperty(default='HaloBridge diagnostics')
     def execute(self,context):
         text=bpy.data.texts.get(self.text_name) or bpy.data.texts.new(self.text_name)
-        context.area.type='TEXT_EDITOR';context.area.spaces.active.text=text;return {'FINISHED'}
+        context.area.type='TEXT_EDITOR';context.area.spaces.active.text=text
+        text.cursor_set(0,character=0)
+        region=next((r for r in context.area.regions if r.type=='WINDOW'),None)
+        if region:
+            with context.temp_override(area=context.area,region=region):
+                bpy.ops.text.move(type='FILE_TOP')
+                bpy.ops.text.scroll(lines=-1000000)
+        return {'FINISHED'}
 
 _icon_token=None
 _icons={}
@@ -1268,9 +1315,9 @@ class HBPanel(bpy.types.Panel):
         row=l.row();row.enabled=_task is None;row.prop(s,'game')
         l.label(text='Folders and Setup',icon='PREFERENCES')
         box=l.box()
-        for n in ('kit','maps'):box.prop(s,n,text=('Reach' if s.game=='reach' else 'Halo 3')+(' Editing Kit' if n=='kit' else ' .map Files'))
+        for n in ('kit','maps'):box.prop(s,n,text=games.GAMES[s.game]['label']+(' Editing Kit' if n=='kit' else ' .map Files'))
         row=box.row();row.operator('halo_bridge.detect',depress=True);row.operator('halo_bridge.check_setup')
-        row=box.row();row.enabled=s.game=='halo3';row.operator('halo_bridge.ground',depress=True)
+        row=box.row();row.enabled=_task is None;row.operator('halo_bridge.ground',depress=True)
         box.prop(s,'map_name');box.operator('halo_bridge.index',depress=True)
         row=box.row();row.enabled=_task is None
         row.operator('halo_bridge.import_map_scene',depress=True)
@@ -1287,12 +1334,9 @@ class HBPanel(bpy.types.Panel):
             control.operator('halo_bridge.list_history',text='Redo' if redo else 'Undo',icon=icon).redo=redo
         l.prop(s,'asset_tab',expand=True)
         l.prop(s,'filter_level')
+        l.label(text='Asset List',icon='ASSET_MANAGER')
         grid=l.grid_flow(columns=3,align=True)
         for category in ('vegetation','rocks','structures','water','materials'):grid.prop(s,'show_'+category,toggle=True)
-        l.separator()
-        row=l.row();row.alignment='CENTER';row.label(text='Asset List',icon='ASSET_MANAGER')
-        row=l.row();row.alignment='CENTER'
-        row.label(text='─'*max(12,min(60,int(context.region.width/8)-4)))
         search=l.box().row(align=True)
         search.prop(s,'search',text='Search Assets',icon='VIEWZOOM')
         clear=search.row(align=True);clear.enabled=bool(s.search)
@@ -1332,7 +1376,7 @@ class HBPanel(bpy.types.Panel):
         try:_,reason=replacement_target(context,selected(context))
         except Exception:reason='Choose an asset in the list to use as the replacement.'
         row=l.row();row.enabled=_task is None and not reason
-        op=row.operator('halo_bridge.place',text='Swap selected object to the selected index asset');op.replace_selected=True
+        op=row.operator('halo_bridge.place',text='Swap selected object(s) to selected index asset');op.replace_selected=True
         if reason:
             for line in textwrap.wrap(reason,width=max(24,int(context.region.width/7)-6)):l.label(text=line)
         active=context.active_object
@@ -1346,13 +1390,8 @@ class HBPanel(bpy.types.Panel):
                 for line in textwrap.wrap('Vehicle: '+active['hb_vehicle_tag'],width=max(24,int(context.region.width/7)-6)):l.label(text=line)
                 l.operator('halo_bridge.vehicle_static')
         l=root
-        if s.game=='reach':
-            l.label(text='Reach: asset and map importing available.')
-            l.label(text='To export these assets to Halo 3:')
-            l.label(text='Switch Import game to Halo 3, then Prepare.')
-            return
         l.separator();l=root.box();l.label(text='Materials and Shaders',icon='MATERIAL')
-        l.label(text='Optional: change the in-game material.')
+        l.label(text='Shaders from the export destination.')
         l.label(text='Imported materials already have shaders.')
         l.operator('halo_bridge.scan_shaders',icon='FILE_REFRESH')
         l.label(text='Shader level / category');l.prop(s,'shader_level',text='')
@@ -1380,13 +1419,16 @@ class HBPanel(bpy.types.Panel):
         row=l.row();row.enabled=_task is None;row.operator('halo_bridge.refresh_skies',icon='FILE_REFRESH')
         l=root.box();l.label(text='(Experimental) Sapien Map Preparation',icon='SCENE_DATA')
         l.prop(s,'export_target')
+        if s.game!=s.export_target:
+            l.prop(s,'export_kit')
+            l.label(text='Mixed-game meshes convert to the destination.')
         if s.export_target=='reach':
             l.label(text='Reach Sapien export is not available yet.',icon='INFO')
             l.label(text='Choose Halo 3 to prepare this scene.')
             return
         l.prop(s,'skip_invalid')
         l.label(text='Output Level Name (without .map)')
-        l.prop(s,'level',text='');l.label(text='Example: shrine20')
+        l.prop(s,'level',text='')
         l.label(text='Current meshes: generated static collision.')
         l.prop(s,'lighting')
         l.prop(s,'open_sapien')

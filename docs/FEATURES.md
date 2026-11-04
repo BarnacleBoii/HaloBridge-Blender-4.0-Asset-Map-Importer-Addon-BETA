@@ -2,7 +2,7 @@
 
 ## Halo 3 and Halo: Reach
 
-Use **Import game**, above **Folders and Setup**, to select **Halo 3** or **Halo: Reach**. Each game remembers its folders, map filename, storage and catalogue. Save the blend file to retain these settings. Switching does not delete scene objects. Reach assets can share a scene with Halo 3 assets. Switch **Import game** back to **Halo 3**, verify H3EK, then use **Prepare current scene for sapien**. Reach meshes are converted to static Halo 3 geometry with generated collision and converted preview textures. Existing Reach objects do not need reimporting. See [Reach conversion](REACH.md).
+Use **Import game**, above **Folders and Setup**, to select **Halo 3** or **Halo: Reach**. Each game remembers its folders, map filename, storage and catalogue. Save the blend file to retain these settings. Switching does not delete scene objects. Reach assets can share a scene with Halo 3 assets. Both import games use the same menus. Keep **Import game** on Reach if desired, set **Export to Sapien** to **Halo 3**, verify the **Halo 3 export Editing Kit** folder, then use **Prepare current scene for sapien**. Sky choices and shader assignments use the export destination kit. Output level name and selected sky stay unchanged when switching import games. Reach meshes are converted to static Halo 3 geometry with generated collision and converted preview textures. Existing Reach objects do not need reimporting. See [Reach conversion](REACH.md).
 
 **Origin to Geometry - all scene meshes** uses Blender's native median geometry center on every mesh, including authored, hidden and previously centered objects, preserving visible geometry and selection. Use Object Mode; Blender Undo is available. Linked library meshes must be made local first.
 
