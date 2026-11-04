@@ -39,7 +39,7 @@ See [Reach setup and limitations](docs/REACH.md).
 - Edit, move, duplicate, or delete geometry in Blender and export that current scene.
 - (Experimental)Choose a sky from installed Editing Kit maps, generate surface collision and optional draft lighting, then open the result in Sapien.
 
-## Requirements at a glance
+## Requirements
 
 **MCC game files and Mod Tools are separate requirements.** Install MCC Halo 3 for its `.map` files. For the full Halo 3 placement/Sapien workflow, also install **Halo 3 Mod Tools - MCC (H3EK)** and extract its supplied tag/data archives. The Editing Kit alone does not replace the MCC maps installation.
 
