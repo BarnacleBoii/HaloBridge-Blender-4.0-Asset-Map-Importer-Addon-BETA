@@ -55,3 +55,27 @@ New scenes place a start above an exposed surface near the cursor, but existing 
 ## Report a problem
 
 Use the repository's **Issues → New issue → Bug report**. Include HaloBridge, Blender and exporter versions; the map name; whether it is first extraction or a cached repeat; exact steps; and sanitized diagnostic text. Attach no Halo assets, map files, tags, caches, or blend files containing game data.
+
+
+## Preparation appears stuck on creating initial planes
+
+Use **Open live activity log** or **Open live compiler output** in Map Preparation Status. These open Blender's Text Editor and refresh during preparation. Return that area to the 3D View when finished. Full logs are saved in the managed `jobs` folder; the activity log includes the raw compiler log path.
+
+The five stages are scene export, materials, geometry/collision compilation, sky/scenario setup, and lighting/final checks. They are not equal in duration. A compiler message such as `creating initial planes... 1%` refers only to that substep, not complete preparation. Halo does not supply a reliable total time remaining.
+
+The display includes elapsed time, time since compiler output, CPU activity (100% means one full CPU core), and resident memory. An active CPU means the process is executing, not that it will necessarily finish successfully. Little CPU activity or no output alone does not prove a hang.
+
+Check the **Main structure** event for the object name and evaluated triangle count. A visually small scene can still contain heavily subdivided terrain. The current exporter uses an actual scene mesh as the main structure and generates collision from current surfaces. Dense structure geometry can be expensive to compile. Reduce unnecessary subdivisions on a copy of your terrain and test that copy if appropriate; the addon does not silently simplify your geometry. Turning off test lighting will not speed up the earlier structure compilation step.
+
+Use **Cancel preparation** to stop a background build and restore the previous successful output. Finish or cancel active jobs before restarting Blender to load an addon update.
+
+
+## Red trees or red overlapping-surfaces labels in Sapien
+
+These labels are compiler debug geometry, not a new visible collision asset. Check the preparation report for geometry warnings even when compilation succeeded. Static mesh preparation generates collision from the current surfaces; it does not restore the original tree collision tag.
+
+Automatic collision handling excludes materials using Halo's foliage shader class and the verified Citadel `cit_tree_leafc` leaf material, while retaining bark and ground collision. Other generic leaf shaders cannot be identified reliably by transparency or name alone. Select the tree in Blender, select its leaf material under **Materials and Shaders > Collision for selected material**, then choose **Render only (no collision)** and prepare again. Do not apply this to the trunk or ground if you need them collidable. Material settings are shared by all objects using that material.
+
+Use **Collidable** to override automatic treatment deliberately. Original source tags and Blender geometry are not modified by these export flags. Existing overlapping or duplicate solid surfaces may still need correction. After rebuilding, reload the resulting scenario and current warning geometry; old debug overlays can be stale. Hiding a warning overlay alone does not correct collision.
+
+See [c20 Halo 3 material flags](https://c20.reclaimers.net/h3/source-data/h3-materials/).

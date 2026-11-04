@@ -39,6 +39,7 @@ class TagOps {
   if(j.operation=="collision") { Collision(j);return; }
   if(j.operation=="inspect_bsp") { InspectBsp(j);return; }
   if(j.operation=="resolve_scenery") { ResolveScenery(j);return; }
+  if(j.operation=="resolve_vehicles") { ResolveVehicles(j);return; }
   if(j.operation=="copy_level") { CopyLevel(j);return; }
   if(j.operation=="verify_base") { VerifyCopiedScenario(Safe(j.template),Safe(j.scenario),true);File.WriteAllText(j.output,js.Serialize(new{version=1,ok=true,original_gameplay_verified=true}));return; }
   if(j.operation=="verify_copy") { VerifyCopiedScenario(Safe(j.template),Safe(j.scenario));File.WriteAllText(j.output,js.Serialize(new{version=1,ok=true,scenario_data_verified=true}));return; }
@@ -47,8 +48,9 @@ class TagOps {
    var scenery=F<TagFieldBlock>(tag.Fields,"scenery");var palette=F<TagFieldBlock>(tag.Fields,"scenery palette");var names=F<TagFieldBlock>(tag.Fields,"object names");
    var owned=new Dictionary<string,int>();
    for(int i=0;i<scenery.Elements.Count;i++) {int ni=F<TagFieldBlockIndex>(scenery.Elements[i].Fields,"name").Value;if(ni>=0 && ni<names.Elements.Count) {string n=F<TagFieldElementStringNormal>(names.Elements[ni].Fields,"name").Data;if(n.StartsWith("hb_")){if(owned.ContainsKey(n))throw new Exception("Duplicate managed placement name: "+n);owned[n]=i;}}}
-   if(j.operation=="sync") {
-    var prev=j.previous??new Dictionary<string,string>();
+   if(j.operation=="sync_vehicles") { SyncVehicles(tag,j);tag.Save();
+   } else if(j.operation=="sync") {
+    var prev=(j.previous??new Dictionary<string,string>()).Where(p=>!p.Key.StartsWith("vehicle:")).ToDictionary(p=>p.Key,p=>p.Value);
     foreach(var pair in prev) if(!owned.ContainsKey(pair.Key)||Hash(scenery,owned[pair.Key])!=pair.Value)throw new Exception("CONFLICT: Sapien changed or removed Blender placement "+pair.Key+". Restore it or explicitly resolve ownership before exporting.");
     foreach(var pair in owned)if(!prev.ContainsKey(pair.Key))throw new Exception("CONFLICT: Untracked Blender placement "+pair.Key);
     var placements=j.placements??new Placement[0];
@@ -102,8 +104,65 @@ class TagOps {
    var scenery=F<TagFieldBlock>(tag.Fields,"scenery");var names=F<TagFieldBlock>(tag.Fields,"object names");var state=new Dictionary<string,string>();var items=new List<object>();
    for(int i=0;i<scenery.Elements.Count;i++){var f=scenery.Elements[i].Fields;int ni=F<TagFieldBlockIndex>(f,"name").Value;string n=ni>=0?F<TagFieldElementStringNormal>(names.Elements[ni].Fields,"name").Data:"";if(n.StartsWith("hb_"))state[n]=Hash(scenery,i);var d=S(f,"object data");items.Add(new{name=n,position=F<TagFieldElementArraySingle>(d,"position").Data,rotation=F<TagFieldElementArraySingle>(d,"rotation").Data,scale=F<TagFieldElementSingle>(d,"scale").Data});}
    var spawns=F<TagFieldBlock>(tag.Fields,"player starting locations");
-   File.WriteAllText(j.output,js.Serialize(new{version=1,ok=true,state=state,placements=items,scenery_count=scenery.Elements.Count,skies=AllReferences(F<TagFieldBlock>(tag.Fields,"skies").Elements.Cast<TagElement>().SelectMany(e=>e.Fields).ToArray()).Where(r=>r.Path!=null).Select(r=>r.Path.RelativePathWithExtension).ToArray(),spawn_count=spawns.Elements.Count,spawns=Convert.ToBase64String(spawns.SerializeEntireBlock())}));Console.WriteLine("Scenario tags verified");
+   var vehicles=F<TagFieldBlock>(tag.Fields,"vehicles");var vp=F<TagFieldBlock>(tag.Fields,"vehicle palette");var vehicleItems=new List<object>();
+   foreach(var pair in VehicleOwned(vehicles,names))state["vehicle:"+pair.Key]=VehicleHash(vehicles,vp,pair.Value);
+   for(int i=0;i<vehicles.Elements.Count;i++){var f=vehicles.Elements[i].Fields;var d=S(f,"object data");int pi=F<TagFieldBlockIndex>(f,"type").Value;int ni=F<TagFieldBlockIndex>(f,"name").Value;vehicleItems.Add(new{name=ni>=0&&ni<names.Elements.Count?F<TagFieldElementStringNormal>(names.Elements[ni].Fields,"name").Data:"",tag=VehicleTag(vehicles,vp,i),position=F<TagFieldElementArraySingle>(d,"position").Data,rotation=F<TagFieldElementArraySingle>(d,"rotation").Data,scale=F<TagFieldElementSingle>(d,"scale").Data});}
+   File.WriteAllText(j.output,js.Serialize(new{version=1,ok=true,state=state,placements=items,vehicles=vehicleItems,scenery_count=scenery.Elements.Count,skies=AllReferences(F<TagFieldBlock>(tag.Fields,"skies").Elements.Cast<TagElement>().SelectMany(e=>e.Fields).ToArray()).Where(r=>r.Path!=null).Select(r=>r.Path.RelativePathWithExtension).ToArray(),spawn_count=spawns.Elements.Count,spawns=Convert.ToBase64String(spawns.SerializeEntireBlock())}));Console.WriteLine("Scenario tags verified");
   }
+ }
+ static Dictionary<string,int> VehicleOwned(TagFieldBlock block,TagFieldBlock names) {
+  var result=new Dictionary<string,int>();
+  for(int i=0;i<block.Elements.Count;i++){int ni=F<TagFieldBlockIndex>(block.Elements[i].Fields,"name").Value;if(ni<0||ni>=names.Elements.Count)continue;string name=F<TagFieldElementStringNormal>(names.Elements[ni].Fields,"name").Data;if(name.StartsWith("hb_")){if(result.ContainsKey(name))throw new Exception("Duplicate managed vehicle name: "+name);result.Add(name,i);}}
+  return result;
+ }
+ static string VehicleHash(TagFieldBlock block,TagFieldBlock palette,int index) {
+  return Hash(block,index)+":"+VehicleTag(block,palette,index);
+ }
+ static string VehicleTag(TagFieldBlock block,TagFieldBlock palette,int index) {
+  int pi=F<TagFieldBlockIndex>(block.Elements[index].Fields,"type").Value;
+  if(pi<0||pi>=palette.Elements.Count)return "";
+  var reference=F<TagFieldReference>(palette.Elements[pi].Fields,"name").Path;
+  return reference==null?"":reference.RelativePath;
+ }
+ static void SyncVehicles(TagFile tag,Job j) {
+  var block=F<TagFieldBlock>(tag.Fields,"vehicles");var palette=F<TagFieldBlock>(tag.Fields,"vehicle palette");var names=F<TagFieldBlock>(tag.Fields,"object names");var owned=VehicleOwned(block,names);
+  var prev=(j.previous??new Dictionary<string,string>()).Where(p=>p.Key.StartsWith("vehicle:")).ToDictionary(p=>p.Key.Substring(8),p=>p.Value);
+  foreach(var pair in prev)if(!owned.ContainsKey(pair.Key)||VehicleHash(block,palette,owned[pair.Key])!=pair.Value)throw new Exception("CONFLICT: Sapien changed or removed Blender vehicle "+pair.Key);
+  foreach(var pair in owned)if(!prev.ContainsKey(pair.Key))throw new Exception("CONFLICT: Untracked Blender vehicle "+pair.Key);
+  var placements=j.placements??new Placement[0];if(placements.Select(p=>p.id).Distinct().Count()!=placements.Length)throw new Exception("Duplicate vehicle placement IDs");
+  foreach(var p in placements){if(p.id==null||!System.Text.RegularExpressions.Regex.IsMatch(p.id,"^hb_[0-9a-f]{24}$")||p.position==null||p.rotation==null||p.position.Length!=3||p.rotation.Length!=3||p.scale<=0||p.position.Concat(p.rotation).Concat(new[]{p.scale}).Any(x=>float.IsNaN(x)||float.IsInfinity(x)))throw new Exception("Invalid vehicle placement");if(!File.Exists(Path.Combine(kit,"tags",Safe(p.tag)+".vehicle")))throw new Exception("Missing vehicle tag: "+p.tag);}
+  var wanted=new HashSet<string>(placements.Select(p=>p.id));
+  foreach(var pair in owned.Where(p=>!wanted.Contains(p.Key)).OrderByDescending(p=>p.Value)){int ni=F<TagFieldBlockIndex>(block.Elements[pair.Value].Fields,"name").Value;block.RemoveElement(pair.Value);F<TagFieldBlockIndex>(names.Elements[ni].Fields,"scenario_datum_index").Value=-1;}
+  owned=VehicleOwned(block,names);
+  foreach(var p in placements){
+   int pi=-1;for(int i=0;i<palette.Elements.Count;i++){var r=F<TagFieldReference>(palette.Elements[i].Fields,"name").Path;if(r!=null&&r.RelativePath.Equals(p.tag,StringComparison.OrdinalIgnoreCase))pi=i;}
+   if(pi<0){pi=palette.Elements.Count;F<TagFieldReference>(palette.AddElement().Fields,"name").Path=TagPath.FromPathAndType(Safe(p.tag),"vehi*");}
+   int index;TagField[] fields;
+   if(owned.TryGetValue(p.id,out index))fields=block.Elements[index].Fields;
+   else {
+    // Never reuse an independently owned name or silently change another object type.
+    if(names.Elements.Cast<TagElement>().Any(e=>F<TagFieldElementStringNormal>(e.Fields,"name").Data==p.id&&F<TagFieldBlockIndex>(e.Fields,"scenario_datum_index").Value>=0))throw new Exception("Vehicle name is already in use: "+p.id);
+    index=block.Elements.Count;fields=block.AddElement().Fields;int ni=names.Elements.Count;var nf=names.AddElement().Fields;
+    F<TagFieldElementStringNormal>(nf,"name").Data=p.id;F<TagFieldBlockIndex>(nf,"object_type").Value=1;F<TagFieldBlockIndex>(nf,"scenario_datum_index").Value=index;F<TagFieldBlockIndex>(fields,"name").Value=ni;
+    var data=S(fields,"object data");var oid=S(data,"object id");F<TagFieldElementInteger>(oid,"unique id").Data=Convert.ToInt32(p.id.Substring(3,7),16);F<TagFieldEnum>(oid,"type").Value=1;F<TagFieldEnum>(oid,"source").Value=1;F<TagFieldBlockIndex>(oid,"origin bsp index").Value=-1;
+    F<TagFieldBlockIndex>(data,"editor folder").Value=-1;F<TagFieldBlockIndex>(S(data,"parent id"),"parent object").Value=-1;
+    F<TagFieldElementSingle>(S(fields,"unit data"),"body vitality").Data=1;
+    var multi=S(fields,"multiplayer data");F<TagFieldEnum>(multi,"owner team").Value=8;F<TagFieldElementInteger>(multi,"quota maximum").Data=1;F<TagFieldBlockIndex>(S(multi,"map variant parent"),"parent object").Value=-1;
+   }
+   F<TagFieldBlockIndex>(fields,"type").Value=pi;var d=S(fields,"object data");F<TagFieldElementArraySingle>(d,"position").Data=p.position;F<TagFieldElementArraySingle>(d,"rotation").Data=p.rotation;F<TagFieldElementSingle>(d,"scale").Data=p.scale;
+  }
+  for(int i=0;i<block.Elements.Count;i++){int ni=F<TagFieldBlockIndex>(block.Elements[i].Fields,"name").Value;if(ni>=0)F<TagFieldBlockIndex>(names.Elements[ni].Fields,"scenario_datum_index").Value=i;}
+ }
+ static void ResolveVehicles(Job j) {
+  var wanted=new HashSet<string>((j.sources??new string[0]).Select(Safe),StringComparer.OrdinalIgnoreCase);var matches=new List<object>();var errors=new List<string>();string root=Path.Combine(kit,"tags");
+  foreach(string file in Directory.EnumerateFiles(root,"*.vehicle",SearchOption.AllDirectories)) {
+   string source=file.Substring(root.Length+1);source=source.Substring(0,source.Length-8);
+   try {using(var vehicle=new TagFile(TagPath.FromPathAndType(source,"vehi*"))) {
+    var model=References(vehicle.Fields).FirstOrDefault(r=>r.FieldName=="model"&&r.Path!=null);if(model==null)continue;
+    using(var modelTag=new TagFile(model.Path)) {var render=References(modelTag.Fields).FirstOrDefault(r=>r.FieldName=="render model"&&r.Path!=null);if(render!=null&&wanted.Contains(render.Path.RelativePath))matches.Add(new{render=render.Path.RelativePath,vehicle=source});}
+   }}catch(Exception e){errors.Add(source+": "+e.Message);}
+  }
+  File.WriteAllText(j.output,js.Serialize(new{version=1,matches=matches,warnings=errors}));
  }
  static void PrepareBitmaps(Job j) {
   string prefix=Path.GetDirectoryName(Safe(j.scenario))+"\\bitmaps\\reach\\";

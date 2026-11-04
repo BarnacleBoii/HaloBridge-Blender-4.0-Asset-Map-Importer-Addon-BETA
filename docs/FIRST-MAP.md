@@ -47,3 +47,21 @@ When preparation succeeds, use **Open in Sapien** or the automatic open option. 
 Use **Import entire .map** to bring in available terrain and static placements at original positions. It does not use the cursor or list filters. Read its import report before editing: missing pieces stay missing unless extraction recovers them.
 
 You can edit or delete those meshes and prepare the result using the same steps above. The original map is not substituted for your edited scene. **Repair incomplete map import** retries missing pieces while preserving existing edits and intentional deletions. Whole campaign maps can be slow and include areas normally streamed separately.
+
+
+## Original Halo 3 vehicles
+
+To keep an imported Scorpion or another supported Halo 3 vehicle functional instead of exporting it as static terrain:
+
+1. Select its imported model in the **3D View**.
+2. Under **Selected Asset > Original Halo 3 Vehicle**, click **Find matching original vehicles**.
+3. Click **Use original Halo 3 vehicle** and choose the intended installed tag. Only tags linked to that render model are offered.
+4. Prepare the scene normally. Keep a terrain/floor mesh in the scene; a vehicle alone does not form a level.
+
+The original vehicle tag supplies its model, collision, physics and behavior. The Blender object remains an editable placement preview and is omitted from the static geometry export. Position, rotation and positive uniform scale are transferred. Copies receive independent placement identifiers; repeat exports update moved vehicles and remove deleted ones while preserving independent scenario placements.
+
+Mesh reshaping and modifiers cannot be transferred to an existing vehicle tag. Original-pivot changes are recovered when the cached preview still proves the unchanged shape. Blender material edits are not applied to the vehicle tag. Use **Use static mesh instead** to return to mesh export, where the original vertex limit applies. This route requires Halo 3 tags and is not Reach vehicle conversion or automatic campaign reconstruction.
+
+Save and restart Blender after updating before using this feature. Vehicle tag creation was verified with the Scorpion; driving, multiplayer rules, respawn tuning and Project Reclaimer behavior need in-game testing.
+
+Background: [c20 Halo 3 scenario reference](https://c20.reclaimers.net/h3/tags/scenario/) and [Microsoft Halo 3 instance geometry](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/art/instanceobjects/instanceobjectshome). Original vehicle tags and static instance geometry are different export routes.

@@ -12,3 +12,13 @@ def compiler_errors(text):
     markers = ('-ERROR-', '-FATAL-', 'LIGHTMAPPER FAILED', 'structure import pipeline failed')
     return list(dict.fromkeys(line.strip() for line in text.splitlines()
                              if any(marker in line for marker in markers)))
+
+def geometry_warnings(text,names):
+    import re
+    result=[]
+    for line in text.replace('\r','\n').splitlines():
+        if 'WARNING' not in line or not any(marker in line.lower() for marker in ('overlapping surfaces','duplicate triangle','degenerate','open edge')):continue
+        start=line.find('WARNING');line=line[start:].strip()
+        line=re.sub(r'\(poop (hb_\d+)(?:\.\d+)?\)',lambda m:'(object '+names.get(m[1],m[1])+')',line)
+        if line not in result:result.append(line)
+    return result

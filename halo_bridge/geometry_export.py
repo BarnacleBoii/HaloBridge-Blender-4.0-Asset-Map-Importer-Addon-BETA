@@ -3,13 +3,13 @@ import hashlib
 from pathlib import Path
 import bpy
 from mathutils import Vector, Matrix
-from . import blender_ops, cross_game, export_review
+from . import blender_ops, cross_game, export_review, vehicles, collision_policy
 from .catalog import read_json
 from .diagnostics import ValidationError
 
 
 def objects(scene):
-    return [o for o in scene.objects if o.type=='MESH' and not o.get('hb_preview')
+    return [o for o in scene.objects if o.type=='MESH' and not o.get('hb_preview') and not vehicles.selected_vehicle(o)
             and (o.get('hb_map_reference') or not o.get('hb_ignore'))]
 
 
@@ -20,7 +20,7 @@ def is_sky(obj):
 def warnings(scene):
     result=[]
     if any(o.get('hb_map_reference') or o.get('hb_id') for o in objects(scene)):
-        result.append('Assets are exported as static, two-sided surfaces with generated collision. Animated doors, breakable objects and gameplay behavior are not recreated.')
+        result.append('Static mesh collision is rebuilt from collidable Blender surfaces; original asset collision tags are not reused on this route. Render-only foliage has no generated collision. Original vehicle placements use their game tags instead.')
     if any(m and m.name.startswith('+sky') for o in objects(scene) for m in o.data.materials):
         result.append('Sky-only faces are replaced by an enclosing sky boundary; solid ground and other mesh surfaces are retained.')
     if any(is_sky(o) for o in objects(scene)):
@@ -37,6 +37,8 @@ def warnings(scene):
 def export(config,path,progress=None):
     progress=progress or (lambda message:None)
     source=bpy.context.scene;depsgraph=bpy.context.evaluated_depsgraph_get()
+    config['vehicle_placements']=vehicles.plan(source,config)
+    for placement in config['vehicle_placements']:progress('Original vehicle placement: '+placement['tag']+' (excluded from static geometry)')
     selected=[o for o in objects(source) if not is_sky(o)]
     if not selected:raise ValidationError(['There are no meshes to export.'])
     blender_ops.ensure_exporter()
@@ -93,14 +95,17 @@ def export(config,path,progress=None):
                     bm=bmesh.new();bm.from_mesh(mesh)
                     bmesh.ops.delete(bm,geom=[f for f in bm.faces if f.material_index in sky_slots],context='FACES')
                     bm.to_mesh(mesh);bm.free()
-                # Preview/render-only flags must not suppress newly generated collision.
+                # Leaf cards must not become solid collision solely because they render.
                 for i,mat in enumerate(list(mesh.materials)):
                     if mat:
                         mk=mat.as_pointer()
                         if mk not in material_cache:
                             copy=mat.copy();materials.append(copy);material_cache[mk]=copy
                             if mk in converted:copy["hb_shader"]=converted[mk]["name"]
-                            copy.ass_jms.render_only=False;copy.ass_jms.collision_only=False
+                            shader=aliases.get(mat.get('hb_shader','').replace('/','\\'),{}).get('source')
+                            copy.ass_jms.render_only=collision_policy.render_only(mat,shader,mat.get('hb_shader',''))
+                            copy.ass_jms.collision_only=False
+                            if copy.ass_jms.render_only:progress('Render-only material (no generated collision): '+mat.name)
                             if not mat.name.startswith('+'):copy.ass_jms.two_sided=True
                         mesh.materials[i]=material_cache[mk]
                         if mk in converted and mesh.uv_layers.active:
@@ -115,12 +120,13 @@ def export(config,path,progress=None):
             config['geometry_names'][clone.name.lstrip('%').split('.')[0]]=obj.name
             clone.matrix_world=Matrix.LocRotScale(location/units,rotation,Vector((1,1,1)))
             clone['hb_working_units']=1
-            solid_faces=[f for f in clone.data.polygons if f.material_index<len(clone.data.materials) and clone.data.materials[f.material_index] and not clone.data.materials[f.material_index].name.startswith('+')]
+            solid_faces=[f for f in clone.data.polygons if f.material_index<len(clone.data.materials) and clone.data.materials[f.material_index] and not clone.data.materials[f.material_index].name.startswith('+') and not clone.data.materials[f.material_index].ass_jms.render_only]
             if solid_faces:
                 authored=not obj.get('hb_id') and not obj.get('hb_map_reference')
                 area=sum(f.area for f in solid_faces)
                 structure_candidates.append((authored,area,clone))
             for face in clone.data.polygons:
+                if clone.data.materials[face.material_index].ass_jms.render_only:continue
                 area=face.area
                 if area>spawn_area and (rotation@face.normal).z>.5:
                     spawn_area=area;spawn=(clone.matrix_world@face.center)+Vector((0,0,1))
@@ -132,6 +138,10 @@ def export(config,path,progress=None):
         base=max(structure_candidates,key=lambda item:(item[0],item[1]))[2]
         base.name=base.name.lstrip('%')
         config['structure_source']=config['geometry_names'][base.name.split('.')[0]]
+        triangles=sum(max(0,len(face.vertices)-2) for face in base.data.polygons)
+        progress(f'Main structure: {config["structure_source"]} — {len(base.data.vertices):,} vertices, {triangles:,} triangles. Halo compiles these surfaces into the level BSP.')
+        if triangles>20000:
+            progress('Complex structure warning: the main structure exceeds 20,000 triangles. This is a performance advisory, not a Halo limit; dense or heavily subdivided terrain can make plane generation very slow. Geometry has not been simplified.')
         # A closed sky hull supplies a valid exterior for extracted render clusters.
         if not bounds:raise ValidationError(['The scene contains only sky faces; add solid geometry.'])
         lo=Vector(tuple(min(v[i] for v in bounds)-10 for i in range(3)))
@@ -146,7 +156,10 @@ def export(config,path,progress=None):
             corners=[obj.matrix_world@Vector(c) for c in obj.bound_box]
             if not all(min(c[i] for c in corners)-.0001<=cursor[i]<=max(c[i] for c in corners)+.0001 for i in (0,1)):continue
             key=obj.data.as_pointer()
-            if key not in trees:trees[key]=BVHTree.FromPolygons([v.co for v in obj.data.vertices],[p.vertices for p in obj.data.polygons])
+            if key not in trees:
+                faces=[p.vertices for p in obj.data.polygons if not obj.data.materials[p.material_index].ass_jms.render_only]
+                trees[key]=BVHTree.FromPolygons([v.co for v in obj.data.vertices],faces) if faces else None
+            if trees[key] is None:continue
             inv=obj.matrix_world.inverted()
             hit,normal,_,_=trees[key].ray_cast(inv@ray_origin,inv.to_3x3()@Vector((0,0,-1)))
             if hit is not None and (obj.matrix_world.to_3x3()@normal).z>.5:

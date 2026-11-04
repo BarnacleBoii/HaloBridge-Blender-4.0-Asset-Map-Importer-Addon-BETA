@@ -12,7 +12,8 @@ from bpy.props import StringProperty, BoolProperty, IntProperty, CollectionPrope
 from .catalog import detect_paths,read_json,write_json,scan_library,merge_assets,indexed_assets,safe_level
 from . import jobs, build, blender_ops, setup, map_scene, navigation, map_export, skies, geometry_export
 from .diagnostics import ValidationError
-from . import source_names,export_review,shader_choices
+from . import source_names,export_review,shader_choices,vehicles
+from .progress import PreparationActivity
 
 def record_failure(error, details=None):
     global _error,_message,_reported_issues
@@ -338,6 +339,7 @@ def start(context,fn,done,message,undo=False):
 def poll():
     global _task,_error,_message
     if not _task:return None
+    sync_activity_texts()
     if bpy.context.scene.as_pointer()!=_task.scene:_task.cancel.set()
     if _task.finished:
         task=_task;_task=None
@@ -373,6 +375,7 @@ def poll():
             record_failure(e,getattr(task,'traceback',None) or traceback.format_exc())
             bpy.ops.halo_bridge.report_diagnostics()
         for area in bpy.context.screen.areas if bpy.context.screen else []:area.tag_redraw()
+        sync_activity_texts()
         return .2 if _task else None
     for area in bpy.context.screen.areas if bpy.context.screen else []:area.tag_redraw()
     return .2
@@ -829,6 +832,63 @@ class HBShader(Guard,bpy.types.Operator):
         export_review.shader_file(context.scene.halo_bridge.kit,tag);obj.active_material['hb_shader']=tag
         obj.active_material['hb_shader_game']=context.scene.halo_bridge.game
 
+_vehicle_items_cache={}
+
+def vehicle_items(operator,context):
+    obj=context.active_object if context else None
+    raw=obj.get('hb_vehicle_matches','[]') if obj else '[]'
+    if raw not in _vehicle_items_cache:
+        rows=json.loads(raw)
+        _vehicle_items_cache[raw]=[(r['vehicle'],r['vehicle'].rsplit('\\',1)[-1],r['vehicle'],i) for i,r in enumerate(rows)]
+    return _vehicle_items_cache[raw]
+
+class HBFindVehicle(Guard,bpy.types.Operator):
+    bl_idname='halo_bridge.find_vehicle';bl_label='Find matching original vehicles'
+    bl_description='Find installed Halo 3 vehicle tags whose render model matches the selected imported object; select a variant afterward'
+    def run(self,context):
+        obj=context.active_object
+        if not obj or obj.type!='MESH':raise RuntimeError('Select the imported vehicle model in the 3D View first.')
+        vehicles.validate_preview(obj);cfg=config(context)
+        if cfg['game']!='halo3':raise RuntimeError('Switch Import game to Halo 3 first.')
+        name=obj.name;source=obj['hb_source_tag'];directory=Path(cfg['cache'])/'jobs';out=directory/('vehicle-matches-'+str(time.time_ns())+'.json')
+        def done(result):
+            global _message
+            target=bpy.data.objects.get(name)
+            if target!=obj or target.get('hb_source_tag')!=source:raise RuntimeError('The selected object changed; find matching vehicles again.')
+            matches=result.get('matches',[]);target['hb_vehicle_matches']=json.dumps(matches)
+            if not matches:raise RuntimeError('No installed Halo 3 vehicle tag references this model. Check that the Editing Kit tags are extracted.')
+            _message='Found '+str(len(matches))+' matching vehicle tag(s). Choose the original vehicle variant under Selected Asset.'
+        start(context,lambda cancel:jobs.helper('tags',dict(operation='resolve_vehicles',kit=cfg['kit'],sources=[source],output=str(out)),directory,cancel),done,'Finding matching Halo 3 vehicle tags...')
+
+class HBChooseVehicle(Guard,bpy.types.Operator):
+    bl_idname='halo_bridge.choose_vehicle';bl_label='Use original Halo 3 vehicle'
+    bl_description='Export the selected object as an original Halo 3 vehicle placement, keeping its game collision and behavior instead of static mesh geometry'
+    bl_property='choice';bl_options={'REGISTER','UNDO'}
+    choice:EnumProperty(items=vehicle_items)
+    target_name:StringProperty(options={'HIDDEN','SKIP_SAVE'})
+    def invoke(self,context,event):
+        if not context.active_object:return {'CANCELLED'}
+        self.target_name=context.active_object.name
+        context.window_manager.invoke_search_popup(self);return {'RUNNING_MODAL'}
+    def run(self,context):
+        global _message
+        obj=context.active_object
+        if not obj or (self.target_name and obj.name!=self.target_name):raise RuntimeError('Select the same object and choose its vehicle again.')
+        vehicles.validate_preview(obj)
+        rows=json.loads(obj.get('hb_vehicle_matches','[]'))
+        if not any(r['vehicle']==self.choice and r['render']==obj['hb_source_tag'] for r in rows):raise RuntimeError('Find matching vehicles for this model first.')
+        obj['hb_vehicle_tag']=self.choice;obj['hb_vehicle_render']=obj['hb_source_tag']
+        if not obj.get('hb_vehicle_id'):obj['hb_vehicle_id']=blender_ops.new_id()
+        _message=obj.name+' will export as an original Halo 3 vehicle: '+self.choice
+
+class HBVehicleStatic(bpy.types.Operator):
+    bl_idname='halo_bridge.vehicle_static';bl_label='Use static mesh instead';bl_options={'REGISTER','UNDO'}
+    bl_description='Export the selected object as static geometry again; vertex limits apply and vehicle behavior is not included'
+    def execute(self,context):
+        obj=context.active_object
+        if obj and 'hb_vehicle_tag' in obj:del obj['hb_vehicle_tag']
+        return {'FINISHED'}
+
 class HBChooseSky(bpy.types.Operator):
     bl_idname='halo_bridge.choose_sky';bl_label='Choose sky from map'
     bl_description='Search installed map skies; the selected scenario is shown below and saved with the scene'
@@ -857,11 +917,48 @@ class HBRefreshSkies(Guard,bpy.types.Operator):
 
 _prepare_running=False
 _prepare_status='Ready to prepare the current scene.'
+_prepare_activity=None
+_activity_text_stamps={}
+
+
+def sync_activity_texts(force=False):
+    if not _prepare_activity:return
+    visible={area.spaces.active.text.name for screen in bpy.data.screens for area in screen.areas
+             if area.type=='TEXT_EDITOR' and area.spaces.active.text}
+    for name,path in (('HaloBridge preparation activity',str(_prepare_activity.path)),
+                      ('HaloBridge compiler output',_prepare_activity.current_log)):
+        if not path or (not force and name not in visible):continue
+        try:
+            source=Path(path);stamp=(path,source.stat().st_mtime_ns,source.stat().st_size)
+            if _activity_text_stamps.get(name)==stamp:continue
+            with source.open('rb') as stream:
+                stream.seek(max(0,stamp[2]-1048576));data=stream.read().decode('utf-8',errors='replace')
+            text=bpy.data.texts.get(name) or bpy.data.texts.new(name)
+            text.clear();text.write('Live log (refreshes while preparing). Full file: '+path+'\n\n'+data)
+            _activity_text_stamps[name]=stamp
+        except OSError:pass
+
+
+class HBActivityLog(bpy.types.Operator):
+    bl_idname='halo_bridge.activity_log';bl_label='Open preparation activity log'
+    bl_description='Show timestamped preparation events or raw compiler output in a live Text Editor; full logs are also saved in the HaloBridge jobs folder'
+    raw:BoolProperty(default=False)
+    def execute(self,context):
+        if not _prepare_activity:return {'CANCELLED'}
+        sync_activity_texts(force=True)
+        name='HaloBridge compiler output' if self.raw else 'HaloBridge preparation activity'
+        text=bpy.data.texts.get(name)
+        if not text:return {'CANCELLED'}
+        context.area.type='TEXT_EDITOR';context.area.spaces.active.text=text
+        return {'FINISHED'}
 
 
 def prepare_status(message,running=False):
     global _prepare_status,_prepare_running
     _prepare_status=message;_prepare_running=running
+    if _prepare_activity:
+        _prepare_activity.ended=None if running else time.monotonic()
+        if not running:_prepare_activity.event(message)
 
 
 def prepare_button_text():
@@ -871,7 +968,9 @@ def prepare_button_text():
 _pending_prepare_warning=None
 
 def preparation_warnings(context,cfg):
+    vehicle_placements=vehicles.plan(context.scene,cfg)
     warnings=geometry_export.warnings(context.scene)
+    if vehicle_placements:warnings.append(str(len(vehicle_placements))+' original Halo 3 vehicle(s) will be placed using their game tags. Their original appearance, physics and behavior replace the Blender preview; Blender material changes are not exported for these vehicles.')
     selected=[o for o in geometry_export.objects(context.scene) if not geometry_export.is_sky(o)]
     issues,_,_=export_review.inspect(selected,cfg)
     if issues:
@@ -883,6 +982,17 @@ def preparation_warnings(context,cfg):
         if len(issues)==len(selected):raise ValidationError(lines+['No exportable objects remain. At least one valid mesh is required.'])
         warnings.extend('WILL NOT EXPORT — '+line for line in lines)
     return warnings
+
+def draw_review_actions(layout,token,enabled=True):
+    # Blender's native operator buttons expose alert/pressed states, not RGB fills.
+    # Keep the affirmative action distinct without changing the user's global theme.
+    row=layout.row();row.enabled=enabled;row.alert=False;row.scale_y=1.3
+    op=row.operator('halo_bridge.confirm_prepare',text='Continue with warnings',icon='CHECKMARK',depress=True)
+    op.token=token;op.accept=True
+    row=layout.row();row.enabled=enabled;row.alert=True;row.scale_y=1.15
+    op=row.operator('halo_bridge.confirm_prepare',text='Cancel',icon='CANCEL')
+    op.token=token;op.accept=False
+
 
 def confirm_map_warnings(context,cfg,error):
     global _pending_prepare_warning,_error,_message,_reported_issues
@@ -903,8 +1013,7 @@ def confirm_map_warnings(context,cfg,error):
             for line in textwrap.wrap(issue,width=95):layout.label(text=line)
         if len(error.issues)>8:layout.label(text='All '+str(len(error.issues))+' warnings are above the Prepare button.')
         layout.separator()
-        op=layout.operator('halo_bridge.confirm_prepare',text='Continue with warnings',icon='CHECKMARK');op.token=token;op.accept=True
-        op=layout.operator('halo_bridge.confirm_prepare',text='Cancel',icon='CANCEL');op.token=token;op.accept=False
+        draw_review_actions(layout,token)
     context.window_manager.popup_menu(draw,title='Prepare for Sapien: review warnings',icon='ERROR')
 
 class HBConfirmPrepare(Guard,bpy.types.Operator):
@@ -957,7 +1066,7 @@ class HBPrepare(Guard,bpy.types.Operator):
         out=Path(cfg['cache'])/'projects'/cfg['level']/'export'/('level_'+str(__import__('time').time_ns())+'.ASS');out.parent.mkdir(parents=True,exist_ok=True)
         last_redraw=[0.0]
         source_scene=context.scene.as_pointer()
-        def progress(message):
+        def report_progress(message):
             global _message
             _message=message;prepare_status(message,True)
             # Background compiler callbacks only update plain strings. Blender RNA
@@ -971,6 +1080,12 @@ class HBPrepare(Guard,bpy.types.Operator):
         def done(path):
             global _message
             _message='Ready: '+path;prepare_status('Finished. Level prepared for Sapien.')
+            issues=cfg.get('compiler_warnings',[])
+            if issues:
+                _message+='\nPrepared with '+str(len(issues))+' geometry warning(s). Open the preparation report for affected objects.'
+                prepare_status('Finished with '+str(len(issues))+' geometry warning(s). Review the preparation report before playtesting.')
+                report=bpy.data.texts.get('HaloBridge preparation report')
+                if report:report.write('\n\nCompiler geometry warnings (level built, but these surfaces need attention):\n'+'\n'.join(issues))
             if context.scene.halo_bridge.open_sapien:open_sapien(cfg)
         warnings=preparation_warnings(context,cfg)
         if warnings and not warnings_accepted:
@@ -982,7 +1097,10 @@ class HBPrepare(Guard,bpy.types.Operator):
             if len(sources)==1:
                 candidate=next(iter(sources))
                 if candidate and (Path(cfg['kit'])/'tags'/(candidate+'.scenario')).is_file():cfg['sky_scenario']=candidate
-        prepare_status('Exporting current meshes and converting materials...',True)
+        global _prepare_activity
+        _prepare_activity=PreparationActivity(Path(cfg['cache'])/'jobs'/('preparation-'+str(time.time_ns())+'.log'),report_progress)
+        progress=_prepare_activity
+        progress.stage(1,'Export current scene meshes')
         placements=geometry_export.export(cfg,out,progress=progress)
         report=bpy.data.texts.get('HaloBridge preparation report') or bpy.data.texts.new('HaloBridge preparation report')
         report.clear();report.write('Current Blender meshes exported. Edits, transforms, modifiers and deletions are included. Collision is generated from current surfaces.\nStructure geometry: '+cfg.get('structure_source','current scene')+'\nSky: '+cfg.get('sky_scenario','default')+'\n\n'+'\n'.join(warnings))
@@ -1100,13 +1218,19 @@ class HBSelectCollisionIssues(Guard,bpy.types.Operator):
 
 def draw_messages(layout,context,popover=False):
     width=48 if popover else max(24,min(85,int((context.region.width if context.region else 360)/7)-5))
-    layout.label(text='Working…' if _task else ('Needs attention' if _error else 'Status'),icon='ERROR' if _error else 'INFO')
+    notice=layout.box()
+    heading=notice.row();heading.alert=bool(_error or _pending_prepare_warning);heading.scale_y=1.3
+    heading.label(text='ACTION REQUIRED' if _error else ('REVIEW PREPARATION WARNINGS' if _pending_prepare_warning else 'Working…' if _task else 'Status'),icon='ERROR' if _error or _pending_prepare_warning else 'INFO')
+    body=notice.column();body.alert=bool(_error)
     for paragraph in _message.splitlines():
-        for line in textwrap.wrap(paragraph,width=width) or ['']:layout.label(text=line)
-    if _task:layout.operator('halo_bridge.cancel')
+        for line in textwrap.wrap(paragraph,width=width) or ['']:body.label(text=line)
+    if _task:
+        row=notice.row();row.alert=True;row.operator('halo_bridge.cancel',icon='CANCEL')
     if _error:
-        layout.operator('halo_bridge.diagnostics',icon='ERROR')
-        if 'CONFLICT' in _error:layout.operator('halo_bridge.resolve')
+        row=notice.row();row.alert=True;row.operator('halo_bridge.diagnostics',icon='ERROR')
+        if 'CONFLICT' in _error:
+            row=notice.row();row.alert=True;row.scale_y=1.4
+            row.operator('halo_bridge.resolve',text='Resolve Conflict: Use Blender',icon='FILE_REFRESH')
     if bpy.data.texts.get('HaloBridge map import report'):
         layout.operator('halo_bridge.diagnostics',text='Open map import report',icon='INFO').text_name='HaloBridge map import report'
     if bpy.data.texts.get('HaloBridge preparation report'):
@@ -1124,6 +1248,7 @@ class HBMessagesPopover(bpy.types.Panel):
 
 def draw_message_header(self,context):
     row=self.layout.row(align=True)
+    row.alert=bool(_error or _pending_prepare_warning)
     row.popover(panel='HB_PT_messages_popover',text='HaloBridge Warnings and Messages',icon='ERROR' if _error else 'INFO')
     row.label(text=textwrap.shorten(_message.replace('\n',' '),width=65,placeholder='…'))
 
@@ -1146,9 +1271,9 @@ class HBPanel(bpy.types.Panel):
         for n in ('kit','maps'):box.prop(s,n,text=('Reach' if s.game=='reach' else 'Halo 3')+(' Editing Kit' if n=='kit' else ' .map Files'))
         row=box.row();row.operator('halo_bridge.detect',depress=True);row.operator('halo_bridge.check_setup')
         row=box.row();row.enabled=s.game=='halo3';row.operator('halo_bridge.ground',depress=True)
-        box.prop(s,'map_name');box.operator('halo_bridge.index')
+        box.prop(s,'map_name');box.operator('halo_bridge.index',depress=True)
         row=box.row();row.enabled=_task is None
-        row.operator('halo_bridge.import_map_scene')
+        row.operator('halo_bridge.import_map_scene',depress=True)
         box.operator('halo_bridge.repair_map')
         box.operator('halo_bridge.center_map_origins')
         box.prop(s,'advanced')
@@ -1156,7 +1281,7 @@ class HBPanel(bpy.types.Panel):
             box.prop(s,'cache',text='Storage location')
             box.label(text='Existing projects need their original records.')
         l.prop(s,'follow_outliner')
-        row=l.row();row.label(text='Asset List',icon='ASSET_MANAGER')
+        row=l.row()
         for redo,icon in ((False,'LOOP_BACK'),(True,'LOOP_FORWARDS')):
             control=row.row();control.enabled=_task is None and history_available(redo)
             control.operator('halo_bridge.list_history',text='Redo' if redo else 'Undo',icon=icon).redo=redo
@@ -1164,6 +1289,10 @@ class HBPanel(bpy.types.Panel):
         l.prop(s,'filter_level')
         grid=l.grid_flow(columns=3,align=True)
         for category in ('vegetation','rocks','structures','water','materials'):grid.prop(s,'show_'+category,toggle=True)
+        l.separator()
+        row=l.row();row.alignment='CENTER';row.label(text='Asset List',icon='ASSET_MANAGER')
+        row=l.row();row.alignment='CENTER'
+        row.label(text='─'*max(12,min(60,int(context.region.width/8)-4)))
         search=l.box().row(align=True)
         search.prop(s,'search',text='Search Assets',icon='VIEWZOOM')
         clear=search.row(align=True);clear.enabled=bool(s.search)
@@ -1186,6 +1315,7 @@ class HBPanel(bpy.types.Panel):
         row=l.row();row.enabled=_task is None and count>0
         row.operator('halo_bridge.list_action',text='Delete checked from list',icon='TRASH').action='DELETE'
         row=l.row();place=row.row();place.enabled=_task is None;place.operator('halo_bridge.place')
+        root=l;l=root.box();l.label(text='Selected Asset',icon='OBJECT_DATA')
         try:
             asset=selected(context)
             if asset['kind']=='material':
@@ -1194,10 +1324,6 @@ class HBPanel(bpy.types.Panel):
                 apply.operator('halo_bridge.place',text='Apply material to selected object').apply_material=True
             status='Exports the current mesh as static geometry with generated collision.' if asset['kind']=='model' else asset.get('status','')
             for line in textwrap.wrap(status,width=44):l.label(text=line)
-            l.label(text='Route: '+asset['kind'])
-            if asset['kind']=='model':
-                l.label(text='Static geometry export.',icon='INFO')
-                l.label(text='Current mesh surfaces provide collision.')
             l.label(text='Map: '+asset['level'])
             if asset.get('section',-1)>=0:l.label(text=asset['tag'].rsplit('\\',1)[-1]+' / section '+str(asset['section']))
             icon_id=asset_icons().get(asset['id'],0)
@@ -1208,14 +1334,26 @@ class HBPanel(bpy.types.Panel):
         row=l.row();row.enabled=_task is None and not reason
         op=row.operator('halo_bridge.place',text='Swap selected object to the selected index asset');op.replace_selected=True
         if reason:
-            for offset in range(0,len(reason),48):l.label(text=reason[offset:offset+48])
+            for line in textwrap.wrap(reason,width=max(24,int(context.region.width/7)-6)):l.label(text=line)
+        active=context.active_object
+        if active and active.type=='MESH' and active.get('hb_game','halo3')=='halo3' and active.get('hb_source_tag'):
+            l.separator();l.label(text='Original Halo 3 Vehicle',icon='AUTO')
+            for line in textwrap.wrap('3D object: '+active.name,width=max(24,int(context.region.width/7)-6)):l.label(text=line)
+            row=l.row();row.enabled=_task is None;row.operator('halo_bridge.find_vehicle')
+            if json.loads(active.get('hb_vehicle_matches','[]')):
+                row=l.row();row.enabled=_task is None;row.operator('halo_bridge.choose_vehicle',icon='VIEWZOOM')
+            if active.get('hb_vehicle_tag'):
+                for line in textwrap.wrap('Vehicle: '+active['hb_vehicle_tag'],width=max(24,int(context.region.width/7)-6)):l.label(text=line)
+                l.operator('halo_bridge.vehicle_static')
+        l=root
         if s.game=='reach':
             l.label(text='Reach: asset and map importing available.')
             l.label(text='To export these assets to Halo 3:')
             l.label(text='Switch Import game to Halo 3, then Prepare.')
             return
-        l.separator();l.label(text='Existing Halo shader (game appearance)')
-        l.label(text='Assigned HaloBridge materials already include this.')
+        l.separator();l=root.box();l.label(text='Materials and Shaders',icon='MATERIAL')
+        l.label(text='Optional: change the in-game material.')
+        l.label(text='Imported materials already have shaders.')
         l.operator('halo_bridge.scan_shaders',icon='FILE_REFRESH')
         l.label(text='Shader level / category');l.prop(s,'shader_level',text='')
         shader=s.shader_choice
@@ -1224,7 +1362,23 @@ class HBPanel(bpy.types.Panel):
         l.prop(s,'shader_manual')
         if s.shader_manual:l.prop(s,'shader_path')
         l.operator('halo_bridge.shader')
-        l.separator();l.label(text='(Experimental) Sapien Map Preparation')
+        active=context.active_object
+        if active and active.type=='MESH' and active.active_material and not vehicles.selected_vehicle(active):
+            l.separator();l.label(text='Collision for selected material')
+            if len(active.material_slots)>1:
+                l.template_list('MATERIAL_UL_mats','hb_collision',active,'material_slots',active,'active_material_index',rows=3)
+            l.label(text=active.active_material.name,icon='MATERIAL')
+            l.prop(active.active_material,'hb_collision_mode',text='Collision')
+            l.label(text='Shared materials affect all objects using them.')
+        l=root.box();l.label(text='Sky (Experimental)',icon='WORLD')
+        l.label(text='Choose the sky used in Sapien.')
+        selected_sky=s.sky_selected if s.sky_selected!='AUTO' else (s.sky_choice or 'AUTO')
+        label=selected_sky.replace('\\','/').rsplit('/',1)[-1] if selected_sky!='AUTO' else 'Original map / default sky'
+        l.operator('halo_bridge.choose_sky',text=label,icon='WORLD')
+        if selected_sky!='AUTO':
+            for line in textwrap.wrap('Selected: '+selected_sky,width=max(24,int(context.region.width/7)-6)):l.label(text=line)
+        row=l.row();row.enabled=_task is None;row.operator('halo_bridge.refresh_skies',icon='FILE_REFRESH')
+        l=root.box();l.label(text='(Experimental) Sapien Map Preparation',icon='SCENE_DATA')
         l.prop(s,'export_target')
         if s.export_target=='reach':
             l.label(text='Reach Sapien export is not available yet.',icon='INFO')
@@ -1233,32 +1387,41 @@ class HBPanel(bpy.types.Panel):
         l.prop(s,'skip_invalid')
         l.label(text='Output Level Name (without .map)')
         l.prop(s,'level',text='');l.label(text='Example: shrine20')
-        l.label(text='(Experimental) Sky From Map')
-        selected_sky=s.sky_selected if s.sky_selected!='AUTO' else (s.sky_choice or 'AUTO')
-        label=selected_sky.replace('\\','/').rsplit('/',1)[-1] if selected_sky!='AUTO' else 'Original map / default sky'
-        l.operator('halo_bridge.choose_sky',text=label,icon='WORLD')
-        for line in textwrap.wrap('Selected: '+selected_sky,width=40):l.label(text=line)
-        row=l.row();row.enabled=_task is None;row.operator('halo_bridge.refresh_skies',icon='WORLD')
         l.label(text='Current meshes: generated static collision.')
         l.prop(s,'lighting')
         l.prop(s,'open_sapien')
+        l=root
         status=l.box();status.label(text='Map Preparation Status',icon='INFO')
         width=max(24,int(context.region.width/7))
-        for line in textwrap.wrap(_prepare_status,width=width):status.label(text=line)
+        if _prepare_activity:
+            status.label(text=_prepare_activity.phase)
+            elapsed=int((_prepare_activity.ended or time.monotonic())-_prepare_activity.started)
+            status.label(text=f'Total elapsed: {elapsed//60:02}:{elapsed%60:02}')
+            status.label(text='Stage counts do not estimate time remaining.')
+            upcoming=('Scene export','Materials','Geometry and collision','Sky and scenario','Lighting / final checks')[_prepare_activity.stage_number:]
+            if upcoming and _prepare_running:
+                for line in textwrap.wrap('Still to run: '+', '.join(upcoming),width=width):status.label(text=line)
+        for paragraph in _prepare_status.splitlines():
+            for line in textwrap.wrap(paragraph,width=width):status.label(text=line)
+        if _prepare_activity:
+            status.separator();status.label(text='Recent preparation activity',icon='TIME')
+            for entry in _prepare_activity.recent[-3:]:
+                for line in textwrap.wrap(entry,width=width):status.label(text=line)
+            status.operator('halo_bridge.activity_log',text='Open live activity log',icon='TEXT')
+            row=status.row();row.enabled=bool(_prepare_activity.current_log)
+            row.operator('halo_bridge.activity_log',text='Open live compiler output',icon='CONSOLE').raw=True
+        if _task and getattr(_task,'is_prepare',False):status.operator('halo_bridge.cancel',text='Cancel preparation',icon='CANCEL')
         if _pending_prepare_warning and _pending_prepare_warning['scene']==context.scene.as_pointer():
-            review=l.box();review.label(text='Review preparation warnings',icon='INFO')
+            review=l.box();heading=review.row();heading.alert=True;heading.scale_y=1.25
+            heading.label(text='Review preparation warnings',icon='ERROR')
             for issue in _pending_prepare_warning['issues']:
                 for line in textwrap.wrap(issue,width=width):review.label(text=line)
-            row=review.row();row.enabled=_task is None and not _prepare_running
-            op=row.operator('halo_bridge.confirm_prepare',text='Continue with warnings',icon='CHECKMARK')
-            op.token=_pending_prepare_warning['token'];op.accept=True
-            op=row.operator('halo_bridge.confirm_prepare',text='Cancel',icon='CANCEL')
-            op.token=_pending_prepare_warning['token'];op.accept=False
+            draw_review_actions(review,_pending_prepare_warning['token'],_task is None and not _prepare_running)
         row=l.row();row.enabled=_task is None and not _prepare_running
-        row.operator('halo_bridge.prepare',text=prepare_button_text(),icon='EXPORT')
-        row=l.row();row.enabled=_task is None;row.operator('halo_bridge.open')
+        row.scale_y=1.3;row.operator('halo_bridge.prepare',text=prepare_button_text(),icon='EXPORT',depress=True)
+        row=l.row();row.enabled=_task is None;row.scale_y=1.2;row.operator('halo_bridge.open',icon='PLAY',depress=True)
 
-classes=(HBApplyExtracted,HBAsset,HBSettings,HBDetect,HBCheckSetup,HBScan,HBIndex,HBPlace,HBClearSearch,HBCheckAssets,HBListHistory,HBListAction,HBPlaceChecked,HBImportMapScene,HBRepairMap,HBPreviewToggle,HBGround,HBScanShaders,HBChooseShader,HBShader,HBChooseSky,HBRefreshSkies,HBPrepare,HBConfirmPrepare,HBOpen,HBResolve,HBCancel,HBDiagnostics,HBReportDiagnostics,HBSelectCollisionIssues,HBCenterMapOrigins,HB_UL_assets,HBMessages,HBMessagesPopover,HBPanel)
+classes=(HBFindVehicle,HBChooseVehicle,HBVehicleStatic,HBActivityLog,HBApplyExtracted,HBAsset,HBSettings,HBDetect,HBCheckSetup,HBScan,HBIndex,HBPlace,HBClearSearch,HBCheckAssets,HBListHistory,HBListAction,HBPlaceChecked,HBImportMapScene,HBRepairMap,HBPreviewToggle,HBGround,HBScanShaders,HBChooseShader,HBShader,HBChooseSky,HBRefreshSkies,HBPrepare,HBConfirmPrepare,HBOpen,HBResolve,HBCancel,HBDiagnostics,HBReportDiagnostics,HBSelectCollisionIssues,HBCenterMapOrigins,HB_UL_assets,HBMessages,HBMessagesPopover,HBPanel)
 
 @persistent
 def load_catalogue(_=None):
@@ -1284,6 +1447,7 @@ def register():
     for cls in classes:bpy.utils.register_class(cls)
     bpy.types.VIEW3D_HT_header.append(draw_message_header)
     bpy.types.Scene.halo_bridge=PointerProperty(type=HBSettings)
+    bpy.types.Material.hb_collision_mode=EnumProperty(name='Export collision',description='Controls collision generated from this material during static scene export',items=[('AUTO','Automatic','Halo foliage shaders and explicit render-only materials do not generate collision; other surfaces remain collidable'),('SOLID','Collidable','Generate collision from these surfaces, including foliage'),('RENDER_ONLY','Render only (no collision)','Keep these surfaces visible but omit them from collision; useful for leaf cards and decorative foliage')],default='AUTO')
     navigation.register()
     bpy.app.handlers.undo_pre.append(cancel_before_history)
     bpy.app.handlers.redo_pre.append(cancel_before_history)
@@ -1305,5 +1469,6 @@ def unregister():
     if load_catalogue in bpy.app.handlers.load_post:bpy.app.handlers.load_post.remove(load_catalogue)
     if paste_selection_updated in bpy.app.handlers.depsgraph_update_post:bpy.app.handlers.depsgraph_update_post.remove(paste_selection_updated)
     del bpy.types.Scene.halo_bridge
+    del bpy.types.Material.hb_collision_mode
     for cls in reversed(classes):bpy.utils.unregister_class(cls)
 

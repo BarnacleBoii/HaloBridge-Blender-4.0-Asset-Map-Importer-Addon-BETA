@@ -12,6 +12,20 @@ BIN=Path(__file__).parent/'bin'
 
 class Cancelled(RuntimeError): pass
 
+def process_activity(process):
+    """CPU seconds and resident bytes from our own child process handle."""
+    if os.name!='nt':return None
+    import ctypes
+    from ctypes import wintypes
+    class Counters(ctypes.Structure):
+        _fields_=[('cb',wintypes.DWORD),('PageFaultCount',wintypes.DWORD)]+[(n,ctypes.c_size_t) for n in ('PeakWorkingSetSize','WorkingSetSize','QuotaPeakPagedPoolUsage','QuotaPagedPoolUsage','QuotaPeakNonPagedPoolUsage','QuotaNonPagedPoolUsage','PagefileUsage','PeakPagefileUsage')]
+    handle=wintypes.HANDLE(int(process._handle));times=[wintypes.FILETIME() for _ in range(4)]
+    if not ctypes.windll.kernel32.GetProcessTimes(handle,*[ctypes.byref(t) for t in times]):return None
+    counters=Counters();counters.cb=ctypes.sizeof(counters)
+    if not ctypes.windll.psapi.GetProcessMemoryInfo(handle,ctypes.byref(counters),counters.cb):return None
+    cpu=sum((t.dwHighDateTime<<32)|t.dwLowDateTime for t in times[2:])/10000000
+    return cpu,counters.WorkingSetSize
+
 def _peak_memory(process):
     if os.name!='nt':return 0
     import ctypes
@@ -27,6 +41,7 @@ def run_process(args, log, cwd=None, cancel=None, status=None):
     flags=getattr(subprocess,'CREATE_NO_WINDOW',0)
     with log.open('w',encoding='utf-8') as stream:
         p=subprocess.Popen([str(a) for a in args],cwd=cwd,stdout=stream,stderr=subprocess.STDOUT,creationflags=flags)
+        if hasattr(status,'bind_process'):status.bind_process(p,process_activity)
         started=time.perf_counter();peak=0
         try:
             while p.poll() is None:
@@ -37,6 +52,9 @@ def run_process(args, log, cwd=None, cancel=None, status=None):
                     if p.poll() is None:p.kill()
                     p.wait();raise Cancelled('Cancelled; the previous successful level is retained.')
                 time.sleep(.1)
+            if status:
+                if hasattr(status,'last_update'):status.last_update=-float('inf')
+                status()
         finally:
             if p.poll() is None: p.kill();p.wait()
             write_json(log.with_suffix('.metrics.json'),dict(seconds=time.perf_counter()-started,peak_working_set_bytes=peak,exit_code=p.returncode))

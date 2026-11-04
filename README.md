@@ -4,7 +4,7 @@
 
 A Blender 4.0 Addon that allows Quickly Importing Halo:MCC fully textured static game assets and entire .maps full textured into Blender, and an experimental option to prepare the current blender scene for a Halo 3 Sapien test level. Currently Supports Halo 3,Halo Reach. more planned.
 (Coded with Chat GPT 6 Astra, guided by user input)
-**v0.8.5 · Beta preview · Windows x64 · Blender 4.0**
+**v0.8.9 · Beta preview · Windows x64 · Blender 4.0**
 
 **[Releases and Downloads](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases)** · **[Installation](docs/INSTALLATION.md)** · **[First map tutorial](docs/FIRST-MAP.md)** · **[Feature guide](docs/FEATURES.md)** · **[Troubleshooting](docs/TROUBLESHOOTING.md)**
 
@@ -17,6 +17,17 @@ GitHub's automatic **Source code** ZIP/TAR downloads are for development and do 
 
 Follow the [installation guide](docs/INSTALLATION.md) for requirements and setup. **Draft releases are review builds and are not available as published downloads.**
 
+
+## New in v0.8.9
+
+This release includes the updates from v0.8.6 through v0.8.9:
+
+- **Original Halo 3 vehicles:** match an imported vehicle model to its installed vehicle tag, retaining the original game collision and behavior instead of exporting a static mesh.
+- **Foliage collision fixes:** recognized leaf materials stay visible without becoming solid collision. Per-material collision choices handle other cases.
+- **Live preparation logs:** build stages, asset counts, elapsed time, CPU/memory activity and compiler output. Remaining time is shown as unknown when Halo does not report it.
+- **Clearer controls:** separated material/sky/preparation sections, highlighted import/preparation buttons, and prominent errors, warnings and conflict actions.
+
+See the [full release notes](RELEASE-NOTES.md), [vehicle instructions](docs/FEATURES.md#original-halo-3-vehicles), and [troubleshooting guide](docs/TROUBLESHOOTING.md). Save and restart Blender when updating; keep your cache and project records.
 
 ## Halo 3 and Halo: Reach
 
@@ -62,7 +73,7 @@ You do not need a separate Reclaimer installation, Osoyoos, or a manually extrac
 
 ## Experimental Sapien preparation
 
-**Sapien preparation is an experimental static-geometry workflow.** It exports your current meshes and generates collision from their surfaces. It does not recreate original AI, scripts, animated doors, breakable objects, vehicles, multiplayer rules, or baked lighting. A whole-map import is a visual starting point, not a complete recovered playable mission.
+**Sapien preparation is an experimental static-geometry workflow.** It exports your current meshes and generates collision from their surfaces. Explicitly marked Halo 3 vehicle previews can instead use their original vehicle tags; see [Original Halo 3 vehicles](docs/FEATURES.md#original-halo-3-vehicles). It does not reconstruct original AI, scripts, animated doors, breakable objects, multiplayer rules, or baked lighting. A whole-map import is a visual starting point, not a complete recovered playable mission.
 
 Some assets are missing or approximate, and invalid or oversized geometry can fail Halo's compiler. Preview materials are approximations; Halo 3 exports use installed shader tags, while Reach exports generate simplified Halo 3 shaders from preview textures. Large Project Reclaimer maps and multiplayer packaging need further testing. Start with a small level and keep your saved work.
 

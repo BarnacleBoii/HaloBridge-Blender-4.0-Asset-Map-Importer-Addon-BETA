@@ -13,6 +13,8 @@ class Layout:
     def operator(self,*args,**kwargs):return self
     def popover(self,**kwargs):self.text.append(kwargs.get('text',''))
     def row(self,**kwargs):return self
+    def box(self,**kwargs):return self
+    def column(self,**kwargs):return self
 
 ui._message='A long warning with useful instructions. '*20
 ui._error='Synthetic collision error'

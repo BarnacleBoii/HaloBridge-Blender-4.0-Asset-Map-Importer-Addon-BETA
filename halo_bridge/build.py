@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from .catalog import read_json, write_json, safe_level
 from .jobs import helper, run_process, Cancelled
-from .diagnostics import ValidationError
+from .diagnostics import ValidationError,geometry_warnings
 from .progress import ToolProgress,tool_label
 
 def ensure_sapien_closed():
@@ -48,6 +48,9 @@ def project_transaction(kit, level, cache):
 
 def prepare(config, ass_file, placements, cancel=None, progress=None):
     progress=progress or (lambda message:None)
+    def stage(number,name):
+        if hasattr(progress,'stage'):progress.stage(number,name)
+        else:progress(f'Stage {number}/5: '+name)
     level=safe_level(config['level']);kit=Path(config['kit']);cache=Path(config['cache'])
     scenario='levels\\multi\\'+level+'\\'+level
     manifest=cache/'projects'/level/'manifest.json';previous=read_json(manifest,{})
@@ -66,7 +69,7 @@ def prepare(config, ass_file, placements, cancel=None, progress=None):
     ensure_sapien_closed()
     jobs=cache/'jobs';jobs.mkdir(parents=True,exist_ok=True)
     def tag_job(operation,**kw):
-        progress({'inspect':'Checking scenario state','environment':'Applying the selected sky','sync':'Updating scenario placements','ensure_spawn':'Checking the player start','prepare_bitmaps':'Configuring converted textures','import_shaders':'Creating converted Halo 3 shaders'}.get(operation,operation))
+        progress({'inspect':'Checking scenario state','environment':'Applying the selected sky','sync':'Updating scenario placements','sync_vehicles':'Updating original vehicle placements','ensure_spawn':'Checking the player start','prepare_bitmaps':'Configuring converted textures','import_shaders':'Creating converted Halo 3 shaders'}.get(operation,operation))
         ensure_sapien_closed()
         return helper('tags',dict(operation=operation,kit=str(kit),scenario=scenario,output=str(jobs/'tag-result.json'),**kw),jobs,cancel)
     def tool(*args):
@@ -88,6 +91,7 @@ def prepare(config, ass_file, placements, cancel=None, progress=None):
         relative='levels\\multi\\'+level+'\\structure\\'+level+'.ASS'
         destination=kit/'data'/relative;destination.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ass_file,destination)
         aliases=list(config.get('shader_aliases',{}).values())
+        stage(2,'Prepare Halo materials')
         for index,alias in enumerate(aliases,1):
             progress(f'Preparing Halo materials {index}/{len(aliases)}: '+Path(alias.get('source',alias['name'])).stem)
             if alias.get('generated'):continue
@@ -109,15 +113,26 @@ def prepare(config, ass_file, placements, cancel=None, progress=None):
             tag_job('prepare_bitmaps',shaders=shaders)
             tool('bitmaps',bitmap_root)
             tag_job('import_shaders',shaders=shaders)
+        stage(3,'Compile geometry and collision')
         text=tool('structure',relative)
+        config['compiler_warnings']=geometry_warnings(text,config.get('geometry_names',{}))
+        if config['compiler_warnings']:
+            warning_report=jobs/('geometry-warnings-'+str(time.time_ns())+'.txt')
+            warning_report.write_text('\n'.join(config['compiler_warnings']),encoding='utf-8')
+            progress(str(len(config['compiler_warnings']))+' geometry warning(s). These may appear as red debug geometry in Sapien. Report: '+str(warning_report))
         if "=== imported structure" not in text or not target.exists():raise RuntimeError('Halo did not confirm a successful structure import.')
+        stage(4,'Apply sky and scenario settings')
         if not previous or previous.get('sky_scenario',r'levels\multi\deadlock\deadlock')!=sky: tag_job('environment',template=sky)
         # Compilation may legitimately update derived placement fields. User edits
         # were checked above, before running Tool with Sapien closed.
         after_compile=tag_job('inspect')['state']
         tag_job('sync',placements=placements,previous=after_compile)
+        if config.get('vehicle_placements') or any(key.startswith('vehicle:') for key in after_compile):
+            progress('Placing original Halo 3 vehicles (using existing vehicle tags)')
+            tag_job('sync_vehicles',placements=config.get('vehicle_placements',[]),previous=after_compile)
         if config.get('spawn_position'):tag_job('ensure_spawn',position=config['spawn_position'])
         if config.get('lighting',True):
+            stage(5,'Generate test lighting and finalize')
             progress('Starting test lighting: 16 tool stages. Each stage can take several minutes.')
             blob=str(100000000+time.time_ns()%900000000);blobdir='faux\\'+blob
             tool('faux_data_sync',scenario,level)
@@ -129,6 +144,7 @@ def prepare(config, ass_file, placements, cancel=None, progress=None):
             tool('faux-build-linear-textures-with-intensity-from-quadratic',scenario,level)
             tool('faux-compress-scenario-bitmaps-dxt5',scenario,level)
             tool('faux-farm-compression-merge',scenario,level)
+        else:stage(5,'Finalize (test lighting disabled)')
         final=tag_job('inspect')
         write_json(manifest,dict(version=1,kit=str(kit.resolve()),scenario=scenario,state=final['state'],placements=placements,completed=time.time(),lighting=bool(config.get('lighting',True)),sky_scenario=sky))
     progress('Ready in Sapien')

@@ -8,7 +8,8 @@ Windows x64, Blender 4.0.0, Halo exporter 2.364.0, and locally installed PC MCC 
 
 ## Current limits
 
-- **Static export:** doors, animated objects, breakable behavior, AI, scripts, triggers, vehicles and multiplayer modes are not reconstructed. Add gameplay in Sapien separately.
+- **Static export:** doors, animated objects, breakable behavior, AI, scripts, triggers and multiplayer modes are not reconstructed. Add gameplay in Sapien separately.
+- **Original vehicles:** explicitly matched Halo 3 model previews can use existing vehicle tags. Edited vehicle meshes and Reach vehicle conversion are not supported; actual driving and multiplayer need a playtest.
 - **Collision:** generated from current mesh surfaces, generally two-sided. Original collision shapes, special surface behavior and material distinctions are not fully retained.
 - **Visual fidelity:** preview textures and variants can be approximate. Water, layered shaders, fog, weather and baked lighting may differ from the game.
 - **Whole-map coverage:** not every BSP or object is guaranteed to decode. Import reports identify known omissions. Campaign BSPs are assembled together rather than streamed as in game.

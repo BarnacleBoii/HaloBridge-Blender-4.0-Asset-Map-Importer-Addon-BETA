@@ -144,3 +144,28 @@ Enable **Skip objects with export problems** to omit whole objects with detected
 **Scan existing shaders** populates the **Existing Halo shader** dropdown from installed .shader tags. Assignment links the active Blender material to an existing game shader; it does not create a shader or replace preview textures. Manual path entry remains optional. **Static model** means geometry-only importing; it is not an error.
 
 **Export to Sapien** currently supports Halo 3. Halo: Reach is marked not available yet and cannot start a build. Reach assets may still be converted into a Halo 3 level.
+
+
+## Original Halo 3 vehicles
+
+To keep an imported Scorpion or another supported Halo 3 vehicle functional instead of exporting it as static terrain:
+
+1. Select its imported model in the **3D View**.
+2. Under **Selected Asset > Original Halo 3 Vehicle**, click **Find matching original vehicles**.
+3. Click **Use original Halo 3 vehicle** and choose the intended installed tag. Only tags linked to that render model are offered.
+4. Prepare the scene normally. Keep a terrain/floor mesh in the scene; a vehicle alone does not form a level.
+
+The original vehicle tag supplies its model, collision, physics and behavior. The Blender object remains an editable placement preview and is omitted from the static geometry export. Position, rotation and positive uniform scale are transferred. Copies receive independent placement identifiers; repeat exports update moved vehicles and remove deleted ones while preserving independent scenario placements.
+
+Mesh reshaping and modifiers cannot be transferred to an existing vehicle tag. Original-pivot changes are recovered when the cached preview still proves the unchanged shape. Blender material edits are not applied to the vehicle tag. Use **Use static mesh instead** to return to mesh export, where the original vertex limit applies. This route requires Halo 3 tags and is not Reach vehicle conversion or automatic campaign reconstruction.
+
+Save and restart Blender after updating before using this feature. Vehicle tag creation was verified with the Scorpion; driving, multiplayer rules, respawn tuning and Project Reclaimer behavior need in-game testing.
+
+Background: [c20 Halo 3 scenario reference](https://c20.reclaimers.net/h3/tags/scenario/) and [Microsoft Halo 3 instance geometry](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/art/instanceobjects/instanceobjectshome). Original vehicle tags and static instance geometry are different export routes.
+
+
+## Warning and action highlights
+
+Errors and preparation warnings have boxed notices and larger alert headings. Resolve Conflict and Cancel use native red alert styling. Prepare, Open in Sapien and Continue with warnings use the selected-button highlight (blue in Blender's standard theme). Continue also has a checkmark. Individual green operator-button fills are not available through the native sidebar layout; HaloBridge does not change the user's global theme.
+
+Static mesh preparation rebuilds collision from collidable Blender surfaces. Original Halo assets often contain collision models, but this route currently does not reuse those tags. The original-vehicle route does reuse the vehicle tag and its collision. Reusing other original collision safely requires verifying the source asset and whether its geometry has been edited; visible meshes alone are not equivalent to their original collision data.
