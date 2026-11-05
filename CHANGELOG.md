@@ -1,3 +1,12 @@
+## 0.9 — shared game workflow and documentation refresh
+
+- Shared Halo 3/Reach panels with independent Halo 3 export routing and one saved kit path.
+- Multi-object greybox swapping using original asset scale; map picker with manual filename entry.
+- Single-sided and open-surface handling, structure-source diagnostics, reports opening at line 1.
+- Mirrored warnings panels, preview status icons and placement highlighting.
+- Workflow-specific installation requirements, Blender-only import guide and updated user documentation.
+- Earlier 0.8.6–0.8.9 work included original Halo 3 vehicle placement, foliage collision policy and live preparation logs; see TESTING.md and release history for scope.
+
 ## 0.8.5 — preparation fixes and searchable material/sky pickers
 
 - **Skip objects with export problems:** optional partial preparation lists each excluded object and reason before confirmation. Objects stay in Blender. Compiler failures still stop preparation; at least one valid mesh is required.

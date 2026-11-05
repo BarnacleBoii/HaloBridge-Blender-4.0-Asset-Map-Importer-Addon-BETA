@@ -1,4 +1,4 @@
-# How HaloBridge works
+# How HaloBridge v0.9 works
 
 [Home](../README.md) · [Feature guide](FEATURES.md) · [Contributing](../CONTRIBUTING.md)
 
@@ -7,6 +7,8 @@
 1. The Blender add-on asks the bundled extraction helper to index your local MCC Halo 3 or Halo: Reach `.map` files. The catalogue stores asset identities, source map information, material references and cache locations.
 2. First-use extraction reads geometry and bitmap data through the bundled Reclaimer libraries. Results are cached on your computer. Blender creates preview materials and shared meshes from this data.
 3. Single-asset placement uses the 3D cursor or a matching preview's transform. Whole-map import instead reads source placement matrices and reconstructs the available static layout in collections.
+
+For individual Halo 3 BSP instances, placement additionally calls the H3EK tag helper to obtain collision metadata. This is why that route still needs extracted kit tags even though the visible meshes/textures come from MCC. Whole-map visual extraction takes a different route.
 
 The runtime path uses extracted mesh/texture cache data for Blender previews, rather than requiring you to export each asset manually in Reclaimer. Legacy AMF/JMS library support remains in the code, but it is not needed for the normal public workflow.
 
@@ -21,7 +23,7 @@ The runtime path uses extracted mesh/texture cache data for Blender previews, ra
 
 ```mermaid
 flowchart LR
-  A[Your MCC Halo 3 maps] --> B[Index and extraction helper]
+  A[Your MCC Halo 3 or Reach maps] --> B[Index and extraction helper]
   B --> C[Local cache]
   C --> D[Place and edit in Blender]
   D --> E[Current geometry / ASS export]
@@ -31,7 +33,7 @@ flowchart LR
   H --> I[Test in Sapien]
 ```
 
-This pipeline does not extract a full editable mission with all original gameplay behavior. The current export route builds static geometry. Original collision, model animation and gameplay logic are not reconstructed from the imported render meshes.
+This pipeline does not extract a full editable mission with all original gameplay behavior. Ordinary meshes export as static geometry. Explicitly verified Halo 3 vehicle placements instead reference original vehicle tags and are omitted from static meshes. Original collision, model animation and gameplay logic are not reconstructed from the imported render meshes.
 
 ## Storage and repeat preparation
 
@@ -51,3 +53,7 @@ Sapien must be closed during preparation to avoid concurrent writes. Existing pl
 | `scripts/package.py` | Audited binary/source release archives |
 
 Helpers exchange JSON jobs and results with the add-on. No online account or cloud extraction service is needed to use HaloBridge. Third-party dependencies and licenses are listed in [THIRD-PARTY.md](../THIRD-PARTY.md).
+
+## Shared game framework
+
+The import profile chooses maps/catalogue/cache; the export destination chooses kit/shaders/skies/compiler. `halo_bridge/games.py` centralizes capabilities. Adding another game requires a validated extraction/conversion adapter, not just adding a dropdown label. The shared sidebar uses the same preview, organization, diagnostics and preparation components for Halo 3 and Reach.

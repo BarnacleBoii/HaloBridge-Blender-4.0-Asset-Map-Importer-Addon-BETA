@@ -2,17 +2,19 @@
 
 ## Halo 3 and Halo: Reach
 
+For Blender-only use, see [Importing](IMPORTING.md); for exact prerequisites, see the [workflow requirements](INSTALLATION.md#requirements).
+
 Use **Import game**, above **Folders and Setup**, to select **Halo 3** or **Halo: Reach**. Each game remembers its folders, map filename, storage and catalogue. Save the blend file to retain these settings. Switching does not delete scene objects. Reach assets can share a scene with Halo 3 assets. Both import games use the same menus. Keep **Import game** on Reach if desired, set **Export to Sapien** to **Halo 3**, verify the Halo 3 Editing Kit folder under **Folders and Setup**, then use **Prepare current scene for sapien**. Sky choices and shader assignments use the export destination kit. Output level name and selected sky stay unchanged when switching import games. Reach meshes are converted to static Halo 3 geometry with generated collision and converted preview textures. Existing Reach objects do not need reimporting. See [Reach conversion](REACH.md).
 
 **Origin to Geometry - all scene meshes** uses Blender's native median geometry center on every mesh, including authored, hidden and previously centered objects, preserving visible geometry and selection. Use Object Mode; Blender Undo is available. Linked library meshes must be made local first.
 
 Browse MCC Halo 3 assets in Blender, position them in your map, and prepare a scenario for Sapien.
 
-**0.8.5 beta preview — Windows x64 and Blender 4.0.** This is an independent community project, not an official Microsoft, Bungie, or 343 Industries tool. Other Blender versions, console maps, games beyond Halo 3 and experimental Halo: Reach, and giant-map performance are not supported by this release.
+**0.9 beta preview — Windows x64 and Blender 4.0.** This is an independent community project, not an official Microsoft, Bungie, or 343 Industries tool. Other Blender versions, console maps, games beyond Halo 3 and experimental Halo: Reach, and giant-map performance are not supported by this release.
 
 ## What it does
 
-- Index assets directly from your installed MCC Halo 3 maps.
+- Index assets directly from your installed MCC Halo 3 or Reach maps.
 - Preview geometry and materials as you click through the asset list.
 - Keep a preview's position, rotation, and scale when placing it.
 - Reuse cached meshes and textures for repeated placements.
@@ -22,17 +24,15 @@ Browse MCC Halo 3 assets in Blender, position them in your map, and prepare a sc
 
 ## Requirements
 
-1. **Blender 4.0, Windows x64.** The adapter is tested with 4.0.0.
-2. **Halo: The Master Chief Collection with Halo 3 installed.** Retain its complete `halo3/maps` directory, including resource maps.
-3. **Halo 3 Editing Kit**, including extracted tag archives. Confirm Tool and Sapien work independently. The High Ground (`deadlock`) scenario is used for starter sky settings; jungle assets also require their corresponding source tags and shaders. See [Microsoft's Editing Kit overview](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/quickstart/quickstartoverview).
-4. **[Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset), version 2.364.0 (v364)**, installed and enabled in Blender. The adapter intentionally rejects unverified exporter versions.
-5. **[.NET 10 Desktop Runtime for Windows x64](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)** and **[.NET Framework 4.8 or newer](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48)**. The SDK is only needed to build from source.
+See the [workflow requirements matrix](INSTALLATION.md#requirements) and [detailed installation steps](INSTALLATION.md). Windows x64, Blender 4.0, the supported Halo Blender toolset 2.364.0 and .NET Desktop Runtime 10 x64 are shared dependencies. The tag helper uses .NET Framework 4.8+.
 
-Game files, game tags, textures, ManagedBlam, and the Halo exporter are not included. You supply these from your own installations. No standalone Reclaimer installation or manually extracted asset library is required.
+Install MCC Halo 3 and/or Reach for the maps you want. Indexing, render-model/material extraction and visual whole-map extraction read MCC maps and shared resources. Individual Halo 3 BSP-instance placement additionally calls H3EK with extracted tags for collision data. Preparing a scene for Halo 3 Sapien requires H3EK and the installed shader/sky dependencies. Extracted HREK tags are not consumed by Reach extraction, although the full-workflow setup checker checks the Reach kit installation.
+
+Check setup is not an import-only readiness test. No game files, Editing Kit libraries or Halo Blender exporter are bundled. A standalone Reclaimer application and manually exported library are unnecessary.
 
 ## Install
 
-1. Download **HaloBridge-0.8.5.zip** from the project's release assets. GitHub's automatic “Source code” ZIP is for developers and does not contain built helpers.
+1. Download **HaloBridge-0.9.0.zip** from the project's release assets. GitHub's automatic “Source code” ZIP is for developers and does not contain built helpers.
 2. Save your Blender work. If replacing an older HaloBridge version, disable and remove it in Preferences, then restart Blender.
 3. Choose **Edit → Preferences → Add-ons → Install**, select the add-on ZIP without unzipping, and enable **HaloBridge - Blender 4.0 Importing**.
 4. Open the 3D View sidebar with **N**, then select **HaloBridge**.
@@ -42,7 +42,7 @@ Game files, game tags, textures, ManagedBlam, and the Halo exporter are not incl
 
 ### Export the current Blender scene (experimental)
 
-Preparation exports the current evaluated meshes, including edits, modifiers, movement, duplication and deletion. It does not substitute the original Editing Kit map. Imported assets become static, two-sided geometry; Tool builds collision from their current surfaces. Doors, breakable objects, animations and gameplay scripts are not reconstructed.
+Preparation exports the current evaluated meshes, including edits, modifiers, movement, duplication and deletion. It does not substitute the original Editing Kit map. Ordinary assets become static geometry; Tool builds collision from eligible current surfaces. Opaque materials are not forced two-sided. Explicit Halo two-sided settings and double-sided alpha previews are preserved; open single-sided surfaces use Halo surface flags without adding reverse faces. Doors, breakable objects, animations and gameplay scripts are not reconstructed.
 
 1. Place assets or import a map, then edit your geometry in Blender.
 2. Choose **Find map skies**, then **Sky from map**. Automatic selection uses the single imported map's primary sky; otherwise the default is High Ground. Imported sky meshes are excluded from solid geometry. Weather and fog are not converted.
@@ -76,15 +76,15 @@ The **Asset List** header has dedicated **Undo / Redo** buttons for the last 30 
 - **Place asset(s)** uses checked entries in the current filtered tab when present, otherwise the highlighted entry. Multiple models are placed together at the 3D cursor. Single-asset placement retains its matching preview transform. Materials are loaded into Blender without changing any existing object. Material rows have a material icon and label. Use **Apply material to selected object** for an intentional assignment. Placement commits as one undo step after extraction; large batches may pause briefly during that commit.
 - The eye icon beside an entry, or **Hide** for checked entries, moves it to Hidden Assets. **Unhide** returns it to its original position. These actions organize the catalogue; they do not hide placed scene objects. Hidden state survives reopening and re-indexing.
 - **Delete checked from list** removes catalogue entries only. Placed objects, cache files, and game files are kept. Re-index the corresponding map to restore deleted entries. The previous catalogue is backed up before each list edit.
-- **Swap selected object to the selected index asset** replaces the HaloBridge object selected in the 3D View with the highlighted list entry, preserving its transform and placement identity. Choose an instance or scenery entry; materials and raw models cannot replace objects. The panel explains unmet requirements beside the disabled button.
+- **Swap selected object(s) to selected index asset** replaces all selected editable scene objects, including greybox cubes, with the highlighted geometry asset. It retains world position/rotation and collections, but uses the replacement asset's original import scale. Mesh edits/modifiers are replaced. Materials cannot replace geometry. Replacements share mesh data; import failure leaves originals intact.
 
 ## Category filters and original map layout import
 
-Category buttons independently include or exclude Vegetation, Rocks, Structures, Water, and Materials. Turn Materials off to see everything else. Preview Mode sits immediately below the index list, remains highlighted in both states, and explicitly reads On or Off. Highlight color follows Blender's theme.
+Category buttons independently include or exclude Vegetation, Rocks, Structures, Water, and Materials. Turn Materials off to see everything else. Preview Mode sits immediately below the index list, shows a green ON icon or red OFF icon. The ON state and Place asset(s) button are highlighted while previewing, without flashing. Colors follow Blender's theme.
 
 **Level Imported** filters the list by the source map, or shows **All Levels**. It works together with search, category toggles and the Imported/Hidden tabs; it does not limit whole-map imports.
 
-New object imports and starter shells use a **100x working scale**. Whole-map spacing and object origins are scaled together; existing saved objects are not automatically resized. Old and new working conventions must not be mixed in an export scene: replace older imports or use a separate scene. Raw-model swapping from an older object converts its transform to the new convention. For an already imported whole map, reimport into a separate scene to adopt the new scale. The x100 working scale does not enlarge the resulting objects in-game.
+New object imports and starter shells use a **100x working scale**. Whole-map spacing and object origins are scaled together; existing saved objects are not automatically resized. Old and new working conventions must not be mixed in an export scene: replace older imports or use a separate scene. Swapping uses the replacement asset's original working scale rather than inheriting the old object's scale. For an already imported whole map, reimport into a separate scene to adopt the new scale. The x100 working scale does not enlarge the resulting objects in-game.
 
 **Import entire .map** reads the scenario's terrain BSPs and static placements and reconstructs their original world positions, orientations, and scales. It ignores the 3D cursor and list filters. Each import creates a separate collection, with child collections for Terrain, BSP instances, Scenery, Machines, Controls, Crates, and Skies. Repeated geometry shares mesh data. No need to index or select all assets first.
 
@@ -135,7 +135,7 @@ Materials and image datablocks use original Halo source names. Full shader/bitma
 
 The status directly above **Prepare current scene for sapien** reports the current mesh count and asset name during geometry preparation. Later stages show the compiler or lighting phase, elapsed time and recent tool output. A quiet tool stage is reported as waiting; it does not invent a percentage. The preparation button displays **(LOADING...PLEASE WAIT)** while the job runs. Open the diagnostic report for complete detected errors; later dependent stages may reveal additional issues.
 
-## Export review and shader selection (0.8.5)
+## Export review and shader selection
 
 An assigned HaloBridge material already carries its game shader reference. Highlighting an Asset List material only selects it for browsing; use Apply material to selected object to assign it. Export checks materials used by evaluated faces, not unused slots.
 

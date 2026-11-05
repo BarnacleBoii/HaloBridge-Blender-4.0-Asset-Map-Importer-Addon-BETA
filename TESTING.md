@@ -1,3 +1,11 @@
+# v0.9 validation summary
+
+The release passes 28 automated Python checks and targeted background Blender checks for shared game routing, Reach material conversion, multi-object swapping, warning confirmation and sidedness policy. UI-only checks do not prove game behavior. Isolated Halo compiler tests passed for a Citadel pine and single-sided floor. A separate user scene compiled in about 95 seconds after a reversible terrain reduction; lighting/play testing were not included, and five nonfatal warnings remained.
+
+The current minimum-dependency, MCC-only installation has not been validated on a clean second machine. Requirements distinguish code paths from setup-checker policy; do not describe all placement as kit-free. Native Reach Sapien and future games remain unavailable.
+
+The sections below retain historical verification details; older two-sided tests describe those builds, not the current default export policy.
+
 # 0.7.0 checks
 
 22 Python regression tests and five Blender suites passed: origins/game profiles, map layout, previews, catalogue and Halo 3 preparation dispatch. Origin tests cover authored, shared, hidden and previously marked meshes, unchanged world geometry and median centers. Game profiles restore saved settings.

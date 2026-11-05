@@ -1,12 +1,14 @@
-# Your first custom test map
+# Your first custom test map — HaloBridge v0.9
 
 [Home](../README.md) · [Installation](INSTALLATION.md) · [Feature reference](FEATURES.md)
+
+Only importing into Blender? Use the [Blender-only guide](IMPORTING.md) instead; this tutorial requires H3EK with extracted tags.
 
 Start with a floor and a few trees or rocks. A small scene makes it easier to identify setup or material problems before building a large map.
 
 ## 1. Find assets
 
-After **Check setup** passes, enter `010_jungle.map` in **.map file name to Index** and choose **Import Map Assets**. Indexing creates a searchable list; it does not extract every asset immediately.
+After completing the [H3EK preparation setup](INSTALLATION.md#4-add-halo-3-sapien-preparation), select or type `010_jungle.map` in **Choose .map file** and choose **Import Map Assets**. Indexing creates a searchable list; it does not extract every asset immediately.
 
 Use **Search Assets**, category buttons, and **Level Imported** to narrow the list. Unknown categories are still shown. **All Levels** shows entries from every indexed map.
 
@@ -26,6 +28,8 @@ New HaloBridge imports use 100 Blender units per Halo world unit. Export convert
 
 To texture authored geometry, load an indexed material with **Place asset(s)**, select your mesh, then use **Apply material to selected object**. Loading a material alone does not assign it. Assign the desired material to faces in Blender as needed. Alternatively, enter an existing Halo shader tag path and choose **Assign existing Halo shader** for the active material. A Blender image alone does not supply a game shader.
 
+You can also greybox with cubes, select several, then use **Swap selected object(s) to selected index asset**. Replacement assets keep position/rotation but use their original scale. Avoid dense terrain subdivisions; visual map size alone does not determine compiler cost.
+
 ## 4. Choose the sky and output
 
 Choose **Find map skies**, then select **Sky from map**. Automatic selection uses a single imported map's primary sky, otherwise High Ground. This reads your Editing Kit tags, so the source scenario must be installed.
@@ -38,6 +42,8 @@ Move the 3D cursor above the intended starting area. A new scenario receives a t
 
 Close Sapien. Choose whether to **Generate Test Lighting for Sapien Level**; leaving it off is faster for an initial geometry check. Choose **Prepare current scene for sapien** and read the warning popup. Continue exports the available current meshes, including edits, modifiers and deletions; cancel stops preparation.
 
+The lower **HaloBridge Warnings and Messages** panel sits above **Map Preparation Status**; the top panel remains available too. **ACTION REQUIRED** means you need to inspect the error or confirmation. Open the activity log for detailed progress. Stage percentages are not a total-time estimate.
+
 Compiler errors still stop the job. Read **HaloBridge Warnings and Messages → Open diagnostic report** for all issues found so far. Fix them and retry. A failed normal build restores the previous generated output.
 
 When preparation succeeds, use **Open in Sapien** or the automatic open option. Inspect the geometry and test player placement. Sapien's saved editor camera can be underground even when the player start is above ground. Add gameplay content in Sapien as needed; exporting geometry does not automatically create a complete game mode.
@@ -46,7 +52,7 @@ When preparation succeeds, use **Open in Sapien** or the automatic open option. 
 
 Use **Import entire .map** to bring in available terrain and static placements at original positions. It does not use the cursor or list filters. Read its import report before editing: missing pieces stay missing unless extraction recovers them.
 
-You can edit or delete those meshes and prepare the result using the same steps above. The original map is not substituted for your edited scene. **Repair incomplete map import** retries missing pieces while preserving existing edits and intentional deletions. Whole campaign maps can be slow and include areas normally streamed separately.
+You can edit or delete those meshes and attempt preparation using the same steps above; full-map imports may require substantial cleanup before Halo Tool accepts them. The original map is not substituted for your edited scene. **Repair incomplete map import** retries missing pieces while preserving existing edits and intentional deletions. Whole campaign maps can be slow and include areas normally streamed separately.
 
 
 ## Original Halo 3 vehicles

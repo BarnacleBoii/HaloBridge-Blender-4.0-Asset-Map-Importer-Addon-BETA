@@ -1,4 +1,4 @@
-# Halo: Reach importing
+# HaloBridge v0.9 — Reach importing and Halo 3 conversion
 
 [Home](../README.md) | [Features](FEATURES.md)
 
@@ -35,7 +35,7 @@ Reach BSP indexing resolves instance sections from resource geometry and may tak
 
 Boneyard indexed 838 instance assets, 851 materials, 320 models and 28 scenery entries. Full extraction produced 8,474 placements from 2 of 3 BSPs; the hidden BSP failed decoding and was reported. Real instance/scenery/material extraction and repeat-cache reuse passed. Blender checks covered shared meshes, previews and a 21-placement sample spanning all seven map groups with original transforms. This is not a full-map runtime or Reach Sapien test.
 
-## Conversion verification in 0.8.0
+## Earlier conversion verification (0.8.0; still a limited fixture)
 
 A real Boneyard instance and Halo 3 test ground compiled into a separate Halo 3 scenario. Repeat preparation with a cutout variant passed. Readback verified three instance definitions and 84 generated collision surfaces; shader tags referenced converted base, normal and alpha bitmaps and the cutout template. Automated Blender tests verified source UV/material preservation, texture conversion, tiled export UVs, edited meshes and sky selection. This does not establish full-map performance or multiplayer/Project Reclaimer compatibility.
 
@@ -44,3 +44,7 @@ A real Boneyard instance and Halo 3 test ground compiled into a separate Halo 3 
 Reach uses the same browser, preview, multi-object swap, material/collision, sky, diagnostics and preparation panels as Halo 3. You do not need to switch the import game back to Halo 3 before preparing. The import game controls the source maps and catalogue; the export destination controls shaders, skies, starter shell, compiler and Sapien. The starter shell still uses Halo 3 Jungle assets and requires that map.
 
 Halo 3 is the only implemented Sapien destination. Reach geometry and preview materials use the existing experimental static conversion route. Original Reach vehicle behavior, animation and collision-tag conversion are not implemented. Halo CE, Halo 2, ODST and Halo 4 are reserved in the capability registry but are not enabled: they need extraction/conversion adapters and validation first.
+
+## Requirements by operation
+
+For models, textures and whole-map visual extraction, Reach data comes from MCC Reach maps and shared resources. Extracted HREK tags are not consumed by that extraction path, although Check setup still expects HREK executables. Halo 3 preparation uses H3EK and its extracted tags. See [Installation](INSTALLATION.md#requirements) for the complete distinction and shared Blender/runtime dependencies.

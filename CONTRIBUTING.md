@@ -27,3 +27,9 @@ blender --background --factory-startup --python-exit-code 1 --python tests/blend
 The Blender smoke test uses a synthetic triangle and material; it replaces the external extractor/exporter checks for this UI-only test. It does not validate ASS output or the game toolchain. Perform a separate local compile and Sapien check with your own game files when changing export or scenario logic.
 
 Do not submit game-derived fixtures. Record tool versions and a short result summary instead. See TESTING.md for the current release's verification scope.
+
+## v0.9 shared game framework
+
+`halo_bridge/games.py` is the capability registry and destination resolver. Keep import profiles separate from export settings; don't duplicate the sidebar for new games. Adding a registry label is not game support: implement and validate extraction/material/conversion adapters first. Preserve explicit failure reporting for unavailable destinations.
+
+Run `tests/blender_shared_games.py`, `tests/blender_multi_swap.py`, `tests/blender_cross_game.py`, and `tests/blender_current_geometry.py` for changes in those areas. Tests requiring game tools are separate from UI/synthetic tests. Keep documentation's requirements matrix aligned with actual helper calls and setup-check behavior.

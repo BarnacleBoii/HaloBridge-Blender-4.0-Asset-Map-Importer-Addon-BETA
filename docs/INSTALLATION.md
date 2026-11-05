@@ -1,59 +1,89 @@
-# Installation and updates
+# HaloBridge v0.9 — installation and updates
 
-[Home](../README.md) · [First map](FIRST-MAP.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[Home](../README.md) · [Installation](INSTALLATION.md) · [First map](FIRST-MAP.md) · [Features](FEATURES.md) · [Troubleshooting](TROUBLESHOOTING.md)
 
 ## Requirements
 
-| Component | Required version / setup |
+**Choose your workflow first.** MCC supplies compiled map geometry and textures. Mod Tools supply editable tags and programs such as Tool and Sapien. Their folders are different; one installation does not replace the other.
+
+| What you want to do | MCC content | Editing Kit / extracted tags |
+| --- | --- | --- |
+| List assets with Import Map Assets | Selected game's complete maps folder | Indexing itself does not use Editing Kit tags |
+| Import models, materials and textures into Blender | Selected game's maps plus shared resource maps | Extraction reads MCC data; see the Halo 3 BSP-instance exception below |
+| Place an individual Halo 3 BSP instance | Halo 3 maps/resources | **H3EK with the matching extracted BSP tags**: current placement also requests original collision data |
+| Import entire .map as a static visual layout | Selected game's maps/resources | Layout extraction reads MCC maps, not HREK/H3EK tags; this is not playable scenario reconstruction |
+| Prepare a scene for Halo 3 Sapien | Maps for the Halo assets you imported | **H3EK, extracted tags and its tools**; shader, sky and vehicle dependencies must exist |
+| Import Reach assets for Blender | Reach maps/resources | Extracted HREK tags are not required by the extractor; the current setup checker nevertheless checks HREK installation |
+| Prepare Reach assets for Halo 3 Sapien | Reach maps/resources | **H3EK with extracted Halo 3 tags** for the destination; not Reach Sapien |
+
+**MCC alone is not enough for every HaloBridge operation.** For the complete Halo 3 browser/placement/preparation workflow, install H3EK and extract its supplied archives. For Blender-only use, the supported extraction routes above do not inherently need game tags, but this release is not a separately validated minimal-dependency installer.
+
+### Software dependencies
+
+| Component | Version and purpose |
 | --- | --- |
-| Windows | 64-bit Windows; other operating systems are not supported |
-| Blender | 4.0; tested with 4.0.0 |
-| MCC Halo 3 | Locally installed PC game, including the complete `halo3/maps` directory and resource maps |
-| Halo 3 Editing Kit | Tool, Sapien and extracted tag archives; test the kit independently first |
-| [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **2.364.0 (v364)** installed and enabled; other exporter versions are rejected |
-| [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) | **10**, Windows **x64** Desktop Runtime, not only the base .NET runtime |
-| [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8 or newer** |
+| Windows | x64; other operating systems unsupported |
+| Blender | **4.0**, tested with 4.0.0; newer Blender releases are not supported by this build |
+| HaloBridge | Install **HaloBridge-0.9.0.zip**, not a source archive |
+| Halo Asset Blender Development Toolset | **2.364.0 (v364)** installed and enabled; HaloBridge checks this version during object placement and export, including Reach objects |
+| .NET Desktop Runtime | **10, Windows x64**, for the bundled extraction helper; the base runtime alone is not the Desktop Runtime |
+| .NET Framework | **4.8 or newer**, for the Editing Kit/tag helper; checked by Check setup |
+| MCC game content | Install the game you are importing, Halo 3 and/or Reach; all MCC games need not be installed |
 
-See [Microsoft's H3EK overview](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/quickstart/quickstartoverview) for the game toolchain. HaloBridge does not install these dependencies for you.
+Dependency downloads: [Blender 4.0 archives](https://download.blender.org/release/Blender4.0/), [Halo Blender toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset), [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0), [.NET Framework 4.8](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48). Use the toolset's v364 release, not an arbitrary latest version.
 
-The current Halo 3 **Check setup** checks the full Editing Kit/export setup.
+## 1. Install the game content
 
-### Install the Editing Kit for Halo 3 preparation
+1. Install Halo: The Master Chief Collection and the Halo 3 and/or Reach content you want to import. Make sure the relevant content is actually downloaded, not just listed as owned.
+2. Find MCC's installation folder, for example through Steam's Manage → Browse local files.
+3. Keep the complete selected game's maps directory. Halo 3 normally uses `halo3/maps`; Reach uses `haloreach/maps` beneath the MCC installation.
+4. Do not move one level map away from its shared resource maps. Missing resource maps can cause missing textures or extraction failures.
 
-1. In Steam Library, enable the **Tools** filter and install **Halo 3 Mod Tools - MCC**. For the current Reach setup profile, also install **Halo: Reach Mod Tools - MCC**.
-2. Open the H3EK installation folder and extract the supplied tag/data archives, preserving their folder structure. The resulting `tags` and `data` folders belong directly inside H3EK, alongside `tool.exe` and `sapien.exe`; avoid an extra nested `H3EK/H3EK` folder. See [Microsoft's Editing Kit instructions](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/quickstart/quickstartoverview).
-3. Keep the original shader and scenario tags needed by your chosen assets and sky. For the default starter sky, confirm `tags/levels/multi/deadlock/deadlock.scenario` exists.
-4. In HaloBridge, set **Halo 3 Editing Kit** to the H3EK root and **Halo 3 .map Files** to MCC's `halo3/maps` folder. For Reach importing, use the HREK root and MCC's `haloreach/maps` folder in that game's profile.
-5. Run **Check setup**. HaloBridge does not download the games, install Mod Tools, or extract Editing Kit archives for you.
+You do not need a standalone Reclaimer installation, Osoyoos, or a manually exported AMF/RMF library for the normal workflow. The release includes HaloBridge's extraction helper and its redistributable dependencies; it does not contain Halo content.
 
-Steam's tool-installation options are described in the [official MCC Creator Hub](https://www.halowaypoint.com/news/halo-2-and-halo-3-mod-tools-release); [Halo Support](https://support.halowaypoint.com/hc/en-us/articles/8955559396372-Halo-The-Master-Chief-Collection-MCC-Update-August-2022) also identifies the Reach Tools entry.
+## 2. Install Blender dependencies and HaloBridge
 
-## Download
+1. Install Windows x64 Blender 4.0 and the runtimes listed above. Restart Blender after installing runtimes.
+2. Download the **v364 / 2.364.0** Halo Blender toolset from its project releases. Follow its release installation instructions, enable it in Blender, and verify its version in Preferences.
+3. Open the [HaloBridge v0.9 release](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases/tag/v0.9). Expand **Assets** and download **HaloBridge-0.9.0.zip**.
+4. In Blender, save your work, then open **Edit → Preferences → Add-ons → Install**. Select that ZIP without unzipping it.
+5. Enable **HaloBridge - Blender 4.0 Importing**. Keep the Halo Blender toolset enabled too. Save Preferences if automatic preference saving is disabled.
+6. Move the mouse over a 3D View, press **N**, and choose the **HaloBridge** sidebar tab. If it is missing, confirm you are in a 3D View and that the add-on enabled without an error.
 
-Open the [v0.8.5 release](https://github.com/barnacleboii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases/tag/v0.8.5). Under **Assets**, choose **HaloBridge-0.8.5.zip**.
+The attached **HaloBridge-0.9.0-source.zip** is for developers, not installation. GitHub's automatic Source code ZIP/TAR files also lack compiled helpers. Refreshed v0.9 assets may be newer than its original tag: use the attached source ZIP for the source matching the current installer.
 
-| Download | Purpose |
-| --- | --- |
-| `HaloBridge-0.8.5.zip` | Install this as a Blender 4.0 addon |
-| `HaloBridge-0.8.5-source.zip` | Developers ONLY, source and build instructions for contributors |
+## 3. Configure Blender-only importing
 
-## Install in Blender
+1. Select **Import game**: Halo 3 or **(Experimental) Halo Reach**.
+2. Under **Folders and Setup**, click **Detect folders**. It fills empty fields; inspect the results, especially if you use multiple Steam libraries. Correct incorrect paths manually.
+3. Set **Halo 3 .map Files** or **Halo: Reach .map Files** to the directory containing that game's maps, not its parent MCC directory and not the Editing Kit `tags` folder.
+4. If using Editing Kit features, set its field to the tool installation root containing `tool.exe`, not the `tags` or `data` subdirectory.
+5. Choose **Check setup** and read the full report. **This is currently a full-workflow checker, not an import-only readiness test.** It checks Editing Kit executables, ManagedBlam, runtimes, and (for Halo 3) a default scenario even when you only intend to import. Missing kit/tag messages can be unrelated to map indexing or visual layout extraction. Do not ignore runtime, map-resource, exporter or extraction errors.
+6. Under **Choose .map file**, use the arrow to search available filenames or type one, including `.map`.
+7. Choose **Import Map Assets** for a browser, or **Import entire .map** for a static layout. See the [Blender-only guide](IMPORTING.md).
 
-1. Save project. In Blender, open **Edit → Preferences → Add-ons → Install**.
-2. Select `HaloBridge-0.8.5.zip` without unzipping it.
-3. Enable **HaloBridge - Blender 4.0 Importing** and the required Halo exporter.
-4. In a 3D View, press **N** and open **HaloBridge**.
-5. Choose **Detect folders**, inspect the two game folder paths, and choose **Check setup**. If detection misses an installation, choose its folders manually.
-6. Resolve the reported missing requirements before importing or preparing a level.
+Switching import games remembers separate folders and catalogues. Save your `.blend` to retain those profiles. It does not remove scene objects. For an individual Halo 3 BSP instance that fails with a collision/tag-helper error, complete the H3EK setup below; MCC-only placement is not supported for that route yet.
 
-## Update an existing installation
+## 4. Add Halo 3 Sapien preparation
 
-Save the blend file and close any active HaloBridge job. Disable and remove the old add-on in Blender Preferences, restart Blender, then install the new ZIP. Restart again if Blender still has old modules loaded. Do not remove your project storage to update the add-on.
+1. In Steam Library, enable the **Tools** filter and install **Halo 3 Mod Tools - MCC**. MCC and this tool are separate installs. **Halo: Reach Mod Tools - MCC** is the separate Reach kit; it is not a substitute for H3EK when exporting to Halo 3.
+2. Open H3EK's installation folder. Extract the supplied tag/source archives as directed by the kit, preserving folder structure. `tags` and `data` belong directly under the kit root, alongside its executables; avoid accidentally nesting another kit folder inside it.
+3. Verify `tool.exe`, `sapien.exe`, `bin/ManagedBlam.dll`, and the extracted `tags` folder exist. Keep the original shader/bitmap/BSP/scenario dependencies used by your assets and selected sky. The current default sky/setup check expects `tags/levels/multi/deadlock/deadlock.scenario`.
+4. With **Import game → Halo 3**, set the H3EK root once under **Folders and Setup**. Run **Check setup**. Follow the kit's own setup instructions if its tools cannot launch independently.
+5. You can return to Reach to browse Reach assets. **Export to Sapien → Halo 3** reuses the saved Halo 3 folders. There is no second export-kit path to enter.
+6. Follow [First Map](FIRST-MAP.md). Save your blend, close Sapien, prepare a small scene, then open the generated `.scenario`. The preparation button does not produce a finished multiplayer `.map` or Project Reclaimer package.
 
-## Where your work lives
+See [Microsoft's H3EK toolchain and folder overview](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/quickstart/quickstartoverview). HaloBridge does not install games, extract kit archives, or supply game licenses/content.
 
-The default storage is `Documents/HaloBridge` in your user folder. **Advanced storage** changes the chosen location; it does not move files. Existing blend files retain their saved storage path.
+## Update without losing your work
 
-Keep `projects` ownership manifests and `backups`. These are needed for safe repeat preparation, not just temporary previews. Save your `.blend` separately. Moving a project between computers requires its dependencies and local paths to be resolved; automatic project migration is not implemented.
+1. Save your `.blend`. Finish or cancel active jobs. Close Sapien before another build.
+2. Disable/remove the old HaloBridge add-on through Blender Preferences, then restart Blender so old Python modules are unloaded.
+3. Install the refreshed installer ZIP, enable HaloBridge, and restart Blender if an older interface remains visible.
+4. Reopen your scene, verify saved folder paths, and check setup. Do not delete the cache or ownership manifests as an update step.
 
-Prepared levels are written inside your Editing Kit at `tags/levels/multi/<level>/<level>.scenario`, with source geometry under `data/levels/multi/<level>/`. Use a unique output name for each project.
+## Storage and generated files
+
+Default storage is `Documents/HaloBridge`; Reach normally uses its `reach` subfolder. **Advanced storage** changes the selected location but does not move files. Keep `projects`, ownership manifests and backups: they support repeat exports and rollback. Save your blend separately. Textures may reference cached files, so retain the cache or deliberately pack/relink images when moving a Blender project.
+
+Prepared tags appear under `H3EK/tags/levels/multi/<level>/<level>.scenario`, and generated source geometry under `H3EK/data/levels/multi/<level>/`. Use distinct output names for distinct projects. Local map/cache paths and project records are not automatically portable to another computer. Game assets and caches must not be uploaded to this GitHub repository.

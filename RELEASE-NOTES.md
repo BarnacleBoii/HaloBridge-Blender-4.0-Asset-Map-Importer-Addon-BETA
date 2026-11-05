@@ -2,6 +2,10 @@
 
 Windows x64 • Blender 4.0 • Halo 3 and experimental Halo: Reach importing
 
+## Documentation refresh
+
+Installation now separates Blender-only extraction, individual Halo 3 BSP-instance placement, and Halo 3 Sapien preparation. Added a Blender-only importing guide and updated Features, First Map, Reach, troubleshooting, architecture and limits for the current v0.9 interface. The full-workflow setup-check caveat is explicit; native Reach Sapien export is not supported. Refreshed installer/source downloads include the guides. No importer behavior changed in this documentation-only refresh.
+
 ## v0.9 interface refresh
 
 - **Choose .map file:** searchable dropdown lists maps from the selected game folder, alongside an editable filename field.

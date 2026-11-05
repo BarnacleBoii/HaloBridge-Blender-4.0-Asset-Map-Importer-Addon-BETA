@@ -1,4 +1,4 @@
-# Troubleshooting
+# HaloBridge v0.9 — troubleshooting
 
 [Home](../README.md) · [Installation](INSTALLATION.md) · [Known limits](LIMITATIONS.md)
 
@@ -12,7 +12,7 @@ Copies paste at the original position. Use the Outliner to select one, then move
 
 ## The Asset List is empty
 
-**Detect folders** does not index every map. Enter a valid installed `.map` filename and click **Import Map Assets**. Clear Search Assets, select **All Levels**, check category buttons, and inspect the Imported/Hidden tabs. Hiding a list entry does not hide an already placed Blender object.
+**Detect folders** does not index every map. Use **Choose .map file** to pick or type a valid installed `.map` filename and click **Import Map Assets**. Clear Search Assets, select **All Levels**, check category buttons, and inspect the Imported/Hidden tabs. Hiding a list entry does not hide an already placed Blender object.
 
 ## Preview takes a long time / whole-map import is slow
 
@@ -79,3 +79,29 @@ Automatic collision handling excludes materials using Halo's foliage shader clas
 Use **Collidable** to override automatic treatment deliberately. Original source tags and Blender geometry are not modified by these export flags. Existing overlapping or duplicate solid surfaces may still need correction. After rebuilding, reload the resulting scenario and current warning geometry; old debug overlays can be stale. Hiding a warning overlay alone does not correct collision.
 
 See [c20 Halo 3 material flags](https://c20.reclaimers.net/h3/source-data/h3-materials/).
+
+## Check setup asks for Mod Tools, but I only want Blender assets
+
+Check setup checks the full workflow. See the [requirements matrix](INSTALLATION.md#requirements) before interpreting every warning as an import blocker. MCC maps supply meshes/textures; the Editing Kit supplies tags and compilation tools. An individual Halo 3 BSP-instance placement does call H3EK for collision data, so that error needs a real kit/tag setup. Do not put MCC maps in the kit's tags folder.
+
+## Map picker is empty or a filename is not found
+
+Verify the selected game's `.map Files` directory and reopen the dropdown; it refreshes when opened. It lists files directly inside that directory. You can still type the filename, including `.map`. Custom maps need their referenced shared resources, and unsupported cache variants may fail extraction.
+
+## Cluster 0 / too many vertices, triangles or strip segments
+
+Cluster numbers are regions produced by Halo Tool, not Blender object names. Read the report's **Structure geometry context** and the activity log's **Main structure** event for the Blender source object and evaluated triangle count. That identifies a structure source, not the exact failing faces. Inspect that object's mesh and modifiers; a dense grid may be baked into the mesh with no subdivision modifier left to disable.
+
+Several independent limits can apply. Removing forced two-sided faces does not guarantee a terrain cluster meets strip limits. A smaller test copy, a reversible terrain reduction, or a properly designed portal/cluster layout may be needed. HaloBridge does not automatically simplify or split geometry. The demonstrated 32,768-to-8,191-triangle terrain reduction is one test result, not a universal threshold or automatic feature.
+
+## Plane builder unable to converge / open or degenerate edges
+
+These are compiler geometry/collision failures, not a missing sky texture. Open single-sided surfaces now receive the appropriate non-manifold surface flag during export. This avoids forcing double-sided rendering, but does not repair every invalid connection, duplicate face or self-intersection. Inspect the named asset and isolate a small test. Alpha presence alone does not mean a surface should have no collision: glass may be collidable. For decorative foliage, use the per-material collision control deliberately.
+
+## Where did preparation stop?
+
+Check the lower **HaloBridge Warnings and Messages** panel directly above Map Preparation Status. It mirrors the top panel, including ACTION REQUIRED and relevant actions. Reports open at line 1; live activity/compiler logs expose detailed progress. Continue with warnings does not override hard compiler limits. Save and restart Blender after installing an update if the old interface persists.
+
+## Swap size differs from my cube
+
+This is intentional: replacement assets use their original import scale, preserving the selected objects' world position/rotation and collections. Scale the resulting placements afterward if needed. For direct placement from a preview, its edited preview transform is retained instead.
