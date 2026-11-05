@@ -69,9 +69,9 @@ See the [release notes](RELEASE-NOTES.md) for changes, validation and remaining 
 5. Enter a map filename such as `010_jungle.map` or Choose from the dropdown menu
 6. For Importing individual assets click "Import Map Assets", For Entire map imports click "Import entire .map"
 7. Scroll Down a little bit in the HaloBridge Menu to see "Asset List", you can toggle categories like Structures, Vegetation, Materials, Rocks, and Water or search for certain assets like "tree", "chief", "scorpion"
-8. **Preview Mode** ON, allows you to select an asset from the list, temporarily render at the 3D cursor until you [Place Asset] wherever you want, just remember to turn it off.
-9. 
-10. Build a small scene and follow the [first-map tutorial](docs/FIRST-MAP.md) to test it in Sapien.
+8. **Preview Mode** ON, allows you to select an asset from the list and temporarily render at the 3D cursor until you [Place Asset] which automatically turns **Preview Mode** off.
+  
+Build a small scene and follow the [first-map tutorial](docs/FIRST-MAP.md) to test it in Sapien.
 
 ## Experimental Sapien Map Preparation
 
