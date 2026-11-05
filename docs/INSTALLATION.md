@@ -4,19 +4,8 @@
 
 ## Requirements
 
-**Choose your workflow first.** MCC supplies compiled map geometry and textures. Mod Tools supply editable tags and programs such as Tool and Sapien. Their folders are different; one installation does not replace the other.
-
-| What you want to do | MCC content | Editing Kit / extracted tags |
-| --- | --- | --- |
-| List assets with Import Map Assets | Selected game's complete maps folder | Indexing itself does not use Editing Kit tags |
-| Import models, materials and textures into Blender | Selected game's maps plus shared resource maps | Extraction reads MCC data; see the Halo 3 BSP-instance exception below |
-| Place an individual Halo 3 BSP instance | Halo 3 maps/resources | **H3EK with the matching extracted BSP tags**: current placement also requests original collision data |
-| Import entire .map as a static visual layout | Selected game's maps/resources | Layout extraction reads MCC maps, not HREK/H3EK tags; this is not playable scenario reconstruction |
-| Prepare a scene for Halo 3 Sapien | Maps for the Halo assets you imported | **H3EK, extracted tags and its tools**; shader, sky and vehicle dependencies must exist |
-| Import Reach assets for Blender | Reach maps/resources | Extracted HREK tags are not required by the extractor; the current setup checker nevertheless checks HREK installation |
-| Prepare Reach assets for Halo 3 Sapien | Reach maps/resources | **H3EK with extracted Halo 3 tags** for the destination; not Reach Sapien |
-
-**MCC alone is not enough for every HaloBridge operation.** For the complete Halo 3 browser/placement/preparation workflow, install H3EK and extract its supplied archives. For Blender-only use, the supported extraction routes above do not inherently need game tags, but this release is not a separately validated minimal-dependency installer.
+MCC supplies compiled map geometry and textures. Mod Tools supply editable tags and programs such as Tool and Sapien. Their folders are different; one installation does not replace the other.
+**MCC alone is not enough for every HaloBridge operation.** For the complete Halo 3 asset browser/placement/preparation workflow, install H3EK and extract its supplied archives. For Blender-only use, the supported extraction routes above do not inherently need game tags, but this release is not a separately validated minimal-dependency installer.
 
 ### Software dependencies
 
