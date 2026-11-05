@@ -16,7 +16,7 @@
 
 See [Microsoft's H3EK overview](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/quickstart/quickstartoverview) for the game toolchain. HaloBridge does not install these dependencies for you.
 
-The current Halo 3 **Check setup** checks the full Editing Kit/export setup even if you only intend to import. A missing-kit warning does not mean the map files should be placed inside the Editing Kit.
+The current Halo 3 **Check setup** checks the full Editing Kit/export setup.
 
 ### Install the Editing Kit for Halo 3 preparation
 
