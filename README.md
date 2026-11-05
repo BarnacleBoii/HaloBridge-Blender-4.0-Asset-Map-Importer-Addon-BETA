@@ -26,8 +26,8 @@ Users should install Halo:MCC and the Halo 3 or Halo Reach Mod Tools, with the E
 | --- | --- |
 | Windows | 64-bit Windows; other operating systems are not supported |
 | Blender | 4.0; tested with 4.0.0 |
-| MCC Halo 3 | Locally installed PC game, including the complete `halo3/maps` directory and resource maps |
-| Halo 3 Editing Kit | Tool, Sapien and extracted tag archives; test the kit independently first |
+| Halo: Master Chief Collection | Fully Installed PC game, Including Halo 3 or Reach installed |
+| Halo 3 Mod Tools Editing Kit | Tool, Sapien and extracted data/tag archives |
 | [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **2.364.0 (v364)** installed and enabled; other exporter versions are rejected |
 | [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) | **10**, Windows **x64** Desktop Runtime, not only the base .NET runtime |
 | [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8 or newer** |
