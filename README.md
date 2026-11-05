@@ -19,7 +19,7 @@ Follow the [installation guide](docs/INSTALLATION.md) for requirements and setup
 
 ## Requirements
 
-**MCC game files and Mod Tools are separate requirements.** Install MCC Halo 3 for its `.map` files. For the full Halo 3 placement/Sapien workflow, also install **Halo 3 Mod Tools - MCC (H3EK)** and extract its supplied tag/data archives. The Editing Kit alone does not replace the MCC maps installation.
+Users should install Halo:MCC and the Halo 3 or Halo Reach Mod Tools, with the Editing Kit tags extracted, Install MCC Halo 3 for its `.map` files. For the full Halo 3 placement/Sapien workflow, also install **Halo 3 Mod Tools - MCC (H3EK)** and extract its supplied tag/data archives. The Mod Tools Editing Kit alone does not replace the MCC maps installation, MCC is still required.
 **For Reach imports, install MCC Halo: Reach. The current Reach setup checker also expects **Halo: Reach Mod Tools - MCC (HREK)**, but asset extraction does not require extracted HREK tags. Preparing Reach assets for Halo 3 still requires **H3EK with extracted Halo 3 tags**, not Reach Sapien. See [which files each workflow needs](docs/INSTALLATION.md#requirements).
 
 | Component | Required version / setup |
