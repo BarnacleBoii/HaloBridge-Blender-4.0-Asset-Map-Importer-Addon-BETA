@@ -32,6 +32,28 @@
 
 Dependency downloads: [Blender 4.0 archives](https://download.blender.org/release/Blender4.0/), [Halo Blender toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset), [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0), [.NET Framework 4.8](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48). Use the toolset's v364 release, not an arbitrary latest version.
 
+### Why the Halo Asset Blender Development Toolset is required
+
+This is a **separate Blender add-on**, not the Halo Mod Tools installed through Steam. Install and enable **both HaloBridge and the Halo Asset Blender Development Toolset** in Blender Preferences.
+
+HaloBridge provides the asset browser, map extraction, previews, placement tools and preparation workflow. The Halo Blender toolset supplies the Halo-specific Blender properties and the **ASS exporter** that HaloBridge calls when preparing level geometry. ASS is an intermediate geometry file consumed by Halo's compiler; Sapien does not load a `.blend` directly. The toolset also supplies the JMS reader used by HaloBridge's optional legacy import route.
+
+**Why install it if I only want assets in Blender?** In v0.9, HaloBridge's individual-object placement path checks and enables this toolset before creating an asset, including Reach assets. Preparation also uses its material flags and exporter. The MCC extraction helper itself does not use the toolset to read textures or list map assets. This is a dependency of the current HaloBridge integration, not a claim that all MCC extraction inherently needs a Blender exporter. Install it for the supported browsing/placement workflow even if you do not plan to use Sapien.
+
+**Why exactly v364 / 2.364.0?** That is the version the integration was verified against, including its ASS export options and coordinate conversion. HaloBridge explicitly rejects other versions; a newer toolset release is not automatically compatible. You normally use HaloBridge's buttons rather than manually exporting an ASS file. The toolset does not supply game maps, textures, tags, Tool or Sapien, and does not replace MCC or H3EK.
+
+### What the other components provide
+
+| Component | Why HaloBridge needs it |
+| --- | --- |
+| Blender 4.0 | Hosts the add-on, displays imported meshes/materials and lets you edit the scene. The add-on and supported exporter are tested against this Blender API version. |
+| MCC Halo 3 / Reach content | Supplies the actual source geometry, bitmaps and placement information in compiled maps. Shared resource maps contain dependencies that may not be inside the level map itself. |
+| H3EK / Halo 3 Mod Tools | Supplies Tool to compile geometry, Sapien to inspect/edit the generated scenario, ManagedBlam for tag access, and editable tags used for shaders, skies, original vehicles and the current individual BSP-instance collision lookup. Required for Halo 3 preparation; see the workflow matrix for import-only exceptions. |
+| HREK / Reach Mod Tools | The current Reach setup checker checks this installation. Reach visual extraction reads MCC maps and does not consume extracted HREK tags. HREK is not the destination for HaloBridge's current Sapien preparation. |
+| .NET 10 Desktop Runtime x64 | Runs HaloBridge's bundled extraction helper. Choose **Desktop Runtime**, not just the base runtime, and **x64**, not x86. Users do not need the SDK unless building the helper from source. |
+| .NET Framework 4.8+ | Runs the separate tag/scenario helper used with the Editing Kit. This is a different runtime family from .NET 10; installing one does not replace the other. It is often already present on Windows. |
+| HaloBridge installer ZIP | Supplies the Blender interface and compiled HaloBridge helpers. The source ZIP does not contain the built helpers and is not the normal user installer. |
+
 ## 1. Install the game content
 
 1. Install Halo: The Master Chief Collection and the Halo 3 and/or Reach content you want to import. Make sure the relevant content is actually downloaded, not just listed as owned.

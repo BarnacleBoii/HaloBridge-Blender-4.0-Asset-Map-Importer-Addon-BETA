@@ -42,6 +42,12 @@ All users need **Windows x64, Blender 4.0, the supported Halo Blender toolset 2.
 
 Start with the **[detailed installation guide and requirements matrix](docs/INSTALLATION.md#requirements)**, then choose **[Blender-only importing](docs/IMPORTING.md)** or **[First Sapien test map](docs/FIRST-MAP.md)**. No game maps, models, textures, tags or Editing Kit libraries are bundled. You do not need a standalone Reclaimer installation or a manually exported asset library.
 
+### Why install the Halo Blender toolset too?
+
+**HaloBridge is the browser and workflow; the [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) provides Halo-specific Blender properties and the ASS geometry exporter used for Sapien preparation.** In the current build, individual asset placement also checks this add-on, including Reach placement, so install and enable **v364 / 2.364.0** even for the supported Blender-only placement workflow. It does not supply or extract the game content; that comes from your MCC maps.
+
+See [why each component is needed](docs/INSTALLATION.md#why-the-halo-asset-blender-development-toolset-is-required) for the difference between this Blender add-on, Steam Mod Tools, the two .NET runtimes, and the optional-versus-required import paths.
+
 ## New in v0.9
 
 Latest interface refresh:
