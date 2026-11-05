@@ -22,10 +22,10 @@ Follow the [installation guide](docs/INSTALLATION.md) for requirements and setup
 **MCC maps provide the models and textures. Mod Tools provide editable tags and the Sapien compilation tools.** You do not need to prepare a Sapien level to use HaloBridge assets in Blender.
 | Component | Required version / setup |
 | --- | --- |
-| Windows | 64-bit Windows; other operating systems are not supported |
-| Blender | 4.0; tested with 4.0.0 |
-| Halo: Master Chief Collection | Fully Installed PC game, Including Halo 3 or Reach installed |
-| Halo 3 Mod Tools Editing Kit | Tool, Sapien and extracted data/tag archives |
+| [Windows](https://www.microsoft.com/windows/) | 64-bit Windows; other operating systems are not supported |
+| [Blender 4.0](https://download.blender.org/release/Blender4.0/) | 4.0; tested with 4.0.0 |
+| [Halo: The Master Chief Collection](https://store.steampowered.com/app/976730/Halo_The_Master_Chief_Collection/) | Fully Installed PC game, Including Halo 3 or Reach installed |
+| [Halo 3 Mod Tools Editing Kit](https://store.steampowered.com/app/1695791/Halo_3_Mod_Tools__MCC/) | Tool, Sapien and extracted data/tag archives |
 | [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **2.364.0 (v364)** installed and enabled; other exporter versions are rejected |
 | [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) | **10**, Windows **x64** Desktop Runtime, not only the base .NET runtime |
 | [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8 or newer** |

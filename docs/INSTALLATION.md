@@ -22,13 +22,13 @@
 
 | Component | Version and purpose |
 | --- | --- |
-| Windows | x64; other operating systems unsupported |
-| Blender | **4.0**, tested with 4.0.0; newer Blender releases are not supported by this build |
-| HaloBridge | Install **HaloBridge-0.9.0.zip**, not a source archive |
-| Halo Asset Blender Development Toolset | **2.364.0 (v364)** installed and enabled; HaloBridge checks this version during object placement and export, including Reach objects |
-| .NET Desktop Runtime | **10, Windows x64**, for the bundled extraction helper; the base runtime alone is not the Desktop Runtime |
-| .NET Framework | **4.8 or newer**, for the Editing Kit/tag helper; checked by Check setup |
-| MCC game content | Install the game you are importing, Halo 3 and/or Reach; all MCC games need not be installed |
+| [Windows](https://www.microsoft.com/windows/) | x64; other operating systems unsupported |
+| [Blender 4.0](https://download.blender.org/release/Blender4.0/) | **4.0**, tested with 4.0.0; newer Blender releases are not supported by this build |
+| [HaloBridge v0.9](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases/tag/v0.9) | Install **HaloBridge-0.9.0.zip**, not a source archive |
+| [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **2.364.0 (v364)** installed and enabled; HaloBridge checks this version during object placement and export, including Reach objects |
+| [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) | **10, Windows x64**, for the bundled extraction helper; the base runtime alone is not the Desktop Runtime |
+| [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8 or newer**, for the Editing Kit/tag helper; checked by Check setup |
+| [MCC game content](https://store.steampowered.com/app/976730/Halo_The_Master_Chief_Collection/) | Install the game you are importing, Halo 3 and/or Reach; all MCC games need not be installed |
 
 Dependency downloads: [Blender 4.0 archives](https://download.blender.org/release/Blender4.0/), [Halo Blender toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset), [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0), [.NET Framework 4.8](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48). Use the toolset's v364 release, not an arbitrary latest version.
 
