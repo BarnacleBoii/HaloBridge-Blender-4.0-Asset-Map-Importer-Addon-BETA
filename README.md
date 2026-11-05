@@ -17,39 +17,6 @@ GitHub's automatic **Source code** ZIP/TAR downloads are for development and do 
 
 Follow the [installation guide](docs/INSTALLATION.md) for requirements and setup. **Draft releases are review builds and are not available as published downloads.**
 
-
-## New in v0.9
-
-Latest interface refresh:
-
-- **Choose .map file:** searchable dropdown lists maps from the selected game folder, alongside an editable filename field.
-- **Warnings where you need them:** a second HaloBridge Warnings and Messages section sits above Map Preparation Status. The original top panel remains; both show the same errors and action buttons.
-- **Preview status:** green ON / red OFF icons, with Place Asset(s) highlighted while previewing. No flashing or global theme changes.
-- **One Editing Kit setup:** preparation reuses the Halo 3 path saved under Folders and Setup. The duplicate export-kit path field has been removed.
-
-- Shared Halo 3/Reach menus, including material, sky, collision and preparation controls.
-- Prepare Reach assets for Halo 3 without switching import games.
-- Swap multiple greybox cubes or placed objects for a chosen asset, using its original scale.
-- Single-sided terrain export and improved handling of open collision surfaces.
-- Diagnostic reports open at the top and identify the main Blender structure behind cluster errors.
-
-See the [release notes](RELEASE-NOTES.md) for changes, validation and remaining limits. Save and restart Blender when updating; keep your cache and project records.
-
-## Halo 3 and Halo: Reach
-
-Use **Import game**, above **Folders and Setup**, to select **Halo 3** or **Halo: Reach**. Each game remembers its folders, map filename, storage and catalogue. Save the blend file to retain these settings. Switching does not delete scene objects. Reach assets can share a scene with Halo 3 assets. Keep either import game selected, choose **Halo 3** as the Sapien destination, verify H3EK, then use **Prepare current scene for sapien**. Reach meshes are converted to static Halo 3 geometry with generated collision and converted preview textures. Existing Reach objects do not need reimporting. See [Reach conversion](docs/REACH.md).
-
-See [Reach setup and limitations](docs/REACH.md).
-
-## What you can do
-
-- Import fully textured static objects or entire campaign/multiplayer maps with their original position/material data.
-- 3D Preview map assets in the asset list by just clicking on the name to show geometry at 3d cursor
-- Search and filter certain assets by map and category.
-- Place and edit multiple assets geometry, materials, textures.
-- Edit, move, duplicate, or delete geometry in Blender and export that current scene.
-- (Experimental)Choose a sky from installed Editing Kit maps, generate surface collision and optional draft lighting, then open the result in Sapien.
-
 ## Requirements
 
 **MCC game files and Mod Tools are separate requirements.** Install MCC Halo 3 for its `.map` files. For the full Halo 3 placement/Sapien workflow, also install **Halo 3 Mod Tools - MCC (H3EK)** and extract its supplied tag/data archives. The Editing Kit alone does not replace the MCC maps installation.
@@ -67,19 +34,48 @@ See [Reach setup and limitations](docs/REACH.md).
 
 See [installation](docs/INSTALLATION.md) for dependency links, folder setup and update instructions. No game maps, models, textures, tags or Editing Kit binaries are bundled.
 
-## Getting Started
+
+## New in v0.9
+
+Latest interface refresh:
+
+Choose .map file: searchable dropdown lists maps from the selected game folder, alongside an editable filename field.
+Warnings where you need them: a second HaloBridge Warnings and Messages section sits above Map Preparation Status. The original top panel remains; both show the same errors and action buttons.
+Preview status: green ON / red OFF icons, with Place Asset(s) highlighted while previewing. No flashing or global theme changes.
+One Editing Kit setup: preparation reuses the Halo 3 path saved under Folders and Setup. The duplicate export-kit path field has been removed.
+Shared Halo 3/Reach menus, including material, sky, collision and preparation controls.
+Prepare Reach assets for Halo 3 without switching import games.
+Swap multiple greybox cubes or placed objects for a chosen asset, using its original scale.
+Single-sided terrain export and improved handling of open collision surfaces.
+Diagnostic reports open at the top and identify the main Blender structure behind cluster errors.
+See the [release notes](RELEASE-NOTES.md) for changes, validation and remaining limits. Save and restart Blender when updating; keep your cache and project records.
+
+## What you can do
+
+- Import fully textured static objects or entire campaign/multiplayer maps with their original position/material data.
+- Import entire campaign/dlc/multiplayer .map files fully textured, collision.
+- 3D Preview individual map assets in the asset index list by clicking on the object name to show a temporary geometry render at the 3d cursor which you can place
+- Search and filter certain assets by map and category.
+- Place, edit, move, duplicate, swap or delete geometry/materials in Blender.
+- (Experimental)Choose a sky from installed Editing Kit maps, generate surface collision and optional draft lighting, then open the result in Sapien.
+- (Experimental)Sapien Map Preparation allows the current blender scene to exported straight into Halo 3 Sapien
+
+## Getting Started with HaloBridge
 
 1. After Installing the [requirements and add-on](docs/INSTALLATION.md).
-2. Open Blender, Open **3D View → Press "N"(key) for viewport sidebar on the right of viewport → HaloBridge**, choose **Detect folders**, then **Check setup**.
-3. Enter a map filename such as `010_jungle.map` and choose **Import Map Assets**.
-4. Turn **Preview Mode** on, select an asset, and choose **Place asset(s)**.
-5. Build a small scene and follow the [first-map tutorial](docs/FIRST-MAP.md) to test it in Sapien.
+2. Open Blender, Press "N"(key) for sidebar menu on the right of viewport → Choose HaloBridge**
+3. [Import Game] Choose the game you want to extract assets from(example: "Halo 3").
+4. Under [Folders and Setup] We can click **Detect folders** which finds folders automatically or manually type the folder paths: the "Halo 3 Editing Kit" is the file path for the Steam Halo Mod Tools Folder Location and the ""Halo 3 .Map Files" is where the Games Folders .map files are(steamapps\common\Halo The Master Chief Collection\halo3\maps) or wherever your .map file is you want to extract from, then **Check setup** to verify.
+5. Enter a map filename such as `010_jungle.map` or Choose from the dropdown menu
+6. For Importing individual assets click "Import Map Assets", For Entire map imports click "Import entire .map"
+7. Scroll Down a little bit in the HaloBridge Menu to see "Asset List", you can toggle categories like Structures, Vegetation, Materials, Rocks, and Water or search for certain assets like "tree", "chief", "scorpion"
+8. **Preview Mode** ON, allows you to select an asset from the list, temporarily render at the 3D cursor until you [Place Asset] wherever you want, just remember to turn it off.
+9. 
+10. Build a small scene and follow the [first-map tutorial](docs/FIRST-MAP.md) to test it in Sapien.
 
-You do not need a separate Reclaimer installation, Osoyoos, or a manually extracted asset library.
+## Experimental Sapien Map Preparation
 
-## Experimental Sapien preparation
-
-**Sapien preparation is an experimental static-geometry workflow.** It exports your current meshes and generates collision from their surfaces. Explicitly marked Halo 3 vehicle previews can instead use their original vehicle tags; see [Original Halo 3 vehicles](docs/FEATURES.md#original-halo-3-vehicles). It does not reconstruct original AI, scripts, animated doors, breakable objects, multiplayer rules, or baked lighting. A whole-map import is a visual starting point, not a complete recovered playable mission.
+**Sapien preparation is an experimental Tool that allows the current Blender scene to be exported straight into *currently* Halo 3 or (Experimental)Halo Reach Sapien. It exports your current meshes and generates collision from their surfaces. Explicitly marked Halo 3 vehicle previews can instead use their original vehicle tags; see [Original Halo 3 vehicles](docs/FEATURES.md#original-halo-3-vehicles). It does not reconstruct original AI, scripts, animated doors, breakable objects, multiplayer rules, or baked lighting. A whole-map import is a visual starting point, not a complete recovered playable mission.
 
 Some assets are missing or approximate, and invalid or oversized geometry can fail Halo's compiler. Preview materials are approximations; Halo 3 exports use installed shader tags, while Reach exports generate simplified Halo 3 shaders from preview textures. Large Project Reclaimer maps and multiplayer packaging need further testing. Start with a small level and keep your saved work.
 
