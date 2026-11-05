@@ -2,6 +2,15 @@
 
 Windows x64 • Blender 4.0 • Halo 3 and experimental Halo: Reach importing
 
+## v0.9 interface refresh
+
+- **Choose .map file:** searchable dropdown lists maps from the selected game folder, alongside an editable filename field.
+- **Warnings where you need them:** a second HaloBridge Warnings and Messages section sits above Map Preparation Status. The original top panel remains; both show the same errors and action buttons.
+- **Preview status:** green ON / red OFF icons, with Place Asset(s) highlighted while previewing. No flashing or global theme changes.
+- **One Editing Kit setup:** preparation reuses the Halo 3 path saved under Folders and Setup. The duplicate export-kit path field has been removed.
+
+The v0.9 download assets have been refreshed. Reinstall the updated ZIP and restart Blender to receive these changes.
+
 ## What changed since v0.8.9
 
 - **Shared Halo 3/Reach interface.** Reach now has the same material, collision, sky, preparation and activity-log panels. Import game selects the source catalogue; Export to Sapien selects the destination. Prepare Reach or mixed-game scenes for Halo 3 without switching import games. Output level and sky stay selected when switching games.

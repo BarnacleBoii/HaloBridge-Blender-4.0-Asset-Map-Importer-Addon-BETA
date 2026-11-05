@@ -20,7 +20,7 @@ Halo 3 storage is preserved. Reach defaults to Documents/HaloBridge/reach. Each 
 
 1. Keep your imported Reach objects in the current Blender scene and edit/place them normally.
 2. Keep **Import game** on Reach and choose **Halo 3** under **Export to Sapien**.
-3. Verify **Halo 3 export Editing Kit** is **H3EK** (leave blank to use saved/detected Halo 3 folders), enter your output level name, and choose a Halo 3 sky.
+3. Configure **H3EK** once under **Folders and Setup** with Halo 3 selected; preparation reuses that saved path while importing Reach, enter your output level name, and choose a Halo 3 sky.
 4. Click **Prepare current scene for sapien**, review the static-geometry warning, and continue.
 
 The export uses current meshes and transforms, including edits and modifiers. It generates collision from their surfaces and builds Halo 3 bitmap and shader tags in the output level folder. Diffuse textures, normal textures, UV tiling and cutout alpha are supported. Existing Reach imports are detected from their object metadata; reimporting is unnecessary. An explicitly assigned Halo 3 shader overrides conversion.

@@ -146,8 +146,6 @@ def game_changed(settings,context):
     profiles[settings.previous_game]={k:getattr(settings,k) for k in keys}
     chosen=profiles.get(settings.game) or dict(detect_paths(settings.game),map_name=games.GAMES[settings.game]['map_name'])
     for key in keys:setattr(settings,key,chosen.get(key,''))
-    if settings.game==settings.export_target and settings.export_kit:
-        settings.kit=settings.export_kit;settings.export_kit=''
     settings.shader_choice='NONE';settings.shader_level='ALL';settings.game_profiles=json.dumps(profiles);settings.previous_game=settings.game
     _catalogue_path=None;_level_items_token=None
     _catalogue=read_json(Path(bpy.path.abspath(settings.cache))/'catalogue.json',{'version':1,'assets':[]})
@@ -156,14 +154,13 @@ def game_changed(settings,context):
 
 class HBSettings(bpy.types.PropertyGroup):
     game:EnumProperty(name='Import game',items=games.IMPORT_ITEMS,default='halo3',update=game_changed)
-    export_kit:StringProperty(name='Halo 3 export Editing Kit',subtype='DIR_PATH',description='Halo 3 destination for preparing this scene while browsing another game; blank uses your saved Halo 3 folders or detected installation')
     previous_game:StringProperty(default='halo3')
     game_profiles:StringProperty(default='{}')
     kit:StringProperty(name='Halo 3 Editing Kit',subtype='DIR_PATH',description='Editing Kit folder containing tool.exe, sapien.exe, and your editable tags')
     maps:StringProperty(name='Halo 3 .map Files',subtype='DIR_PATH',description='Your installed MCC maps folder for the selected Halo game')
     library:StringProperty(name='Extracted library',subtype='DIR_PATH')
     cache:StringProperty(name='Project and cache folder',subtype='DIR_PATH',description='Stores automatically extracted assets, project records, backups, and job logs for reuse')
-    map_name:StringProperty(name='.map file name to Index',default='010_jungle.map',description='Filename for the selected game, such as 010_jungle.map for Halo 3 or 70_boneyard.map for Reach')
+    map_name:StringProperty(name='Choose .map file',default='010_jungle.map',description='Type a map filename, or use the adjacent dropdown to search maps in the selected game folder')
     level:StringProperty(name='Output Level Name (without .map)',default='hb_jungle_map',description='Name for your generated level; use 3–32 lowercase letters, digits, or underscores, starting with a letter')
     export_target:EnumProperty(name='Export to Sapien',items=[('halo3','Halo 3','Prepare using the Halo 3 Editing Kit'),('reach','Halo: Reach — not available yet','Reach importing is supported, but Reach Sapien compilation and tag writing are not implemented')],default='halo3')
     skip_invalid:BoolProperty(name='Skip objects with export problems',default=False,description='After review, omit entire objects with detected mesh or material problems. Objects stay in Blender. Compiler errors still stop the build')
@@ -467,6 +464,41 @@ class HBScan(Guard,bpy.types.Operator):
             before=list_snapshot(context);before['data']=copy.deepcopy(base);before['path']=str((Path(cfg['cache'])/'catalogue.json').resolve())
             _catalogue=merge_assets(base,result['assets']);refresh(context);remember_list(context,before);_message=f"Found {len(result['assets'])} extracted models."
         start(context,lambda cancel:scan_library(cfg['library']),done,'Scanning existing models and textures…')
+
+_map_file_items=[]
+_map_file_retired=[]
+
+
+def refresh_map_files(context):
+    global _map_file_items
+    folder=Path(bpy.path.abspath(context.scene.halo_bridge.maps))
+    if not context.scene.halo_bridge.maps or not folder.is_dir():
+        raise RuntimeError('Choose the selected game .map Files folder first, or type a filename manually.')
+    names=sorted((p.name for p in folder.iterdir() if p.is_file() and p.suffix.lower()=='.map'),key=str.casefold)
+    if not names:raise RuntimeError('No .map files found in '+str(folder)+'. Check the folder or type a filename manually.')
+    _map_file_retired.append(_map_file_items)
+    _map_file_items=[(name,name,'Use '+name,index) for index,name in enumerate(names)]
+    return _map_file_items
+
+
+class HBChooseMap(bpy.types.Operator):
+    bl_idname='halo_bridge.choose_map';bl_label='Choose .map file'
+    bl_description='Search .map files in the selected game folder; choosing one fills the editable filename without importing'
+    bl_property='choice'
+    choice:EnumProperty(items=lambda self,context:_map_file_items)
+    @classmethod
+    def poll(cls,context):return _task is None
+    def invoke(self,context,event):
+        try:refresh_map_files(context)
+        except (OSError,RuntimeError) as error:
+            self.report({'WARNING'},str(error));return {'CANCELLED'}
+        context.window_manager.invoke_search_popup(self)
+        return {'RUNNING_MODAL'}
+    def execute(self,context):
+        if self.choice not in {item[0] for item in _map_file_items}:return {'CANCELLED'}
+        context.scene.halo_bridge.map_name=self.choice
+        return {'FINISHED'}
+
 
 class HBIndex(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.index';bl_label='Import Map Assets'
@@ -1318,7 +1350,11 @@ class HBPanel(bpy.types.Panel):
         for n in ('kit','maps'):box.prop(s,n,text=games.GAMES[s.game]['label']+(' Editing Kit' if n=='kit' else ' .map Files'))
         row=box.row();row.operator('halo_bridge.detect',depress=True);row.operator('halo_bridge.check_setup')
         row=box.row();row.enabled=_task is None;row.operator('halo_bridge.ground',depress=True)
-        box.prop(s,'map_name');box.operator('halo_bridge.index',depress=True)
+        box.label(text='Choose .map file')
+        row=box.row(align=True);row.enabled=_task is None
+        row.prop(s,'map_name',text='')
+        row.operator('halo_bridge.choose_map',text='',icon='DOWNARROW_HLT')
+        box.operator('halo_bridge.index',depress=True)
         row=box.row();row.enabled=_task is None
         row.operator('halo_bridge.import_map_scene',depress=True)
         box.operator('halo_bridge.repair_map')
@@ -1349,7 +1385,7 @@ class HBPanel(bpy.types.Panel):
         else:l.template_list('HB_UL_assets','',s,'assets',s,'active_index',rows=7)
         on=s.preview_enabled
         toggle=l.row();toggle.enabled=on or _task is None
-        toggle.operator('halo_bridge.toggle_preview',text='Preview Mode: On' if on else 'Preview Mode: Off',depress=True,icon='HIDE_OFF' if on else 'HIDE_ON')
+        toggle.operator('halo_bridge.toggle_preview',text='Preview Mode: ON' if on else 'Preview Mode: OFF',depress=on,icon='SEQUENCE_COLOR_04' if on else 'SEQUENCE_COLOR_01')
         count=len(checked_ids(context))
         row=l.row(align=True);row.operator('halo_bridge.check_assets',text='Select all').check=True
         row.operator('halo_bridge.check_assets',text='Clear checks').check=False;row.label(text=str(count)+' checked')
@@ -1358,7 +1394,7 @@ class HBPanel(bpy.types.Panel):
         op.action='UNHIDE' if s.asset_tab=='HIDDEN' else 'HIDE'
         row=l.row();row.enabled=_task is None and count>0
         row.operator('halo_bridge.list_action',text='Delete checked from list',icon='TRASH').action='DELETE'
-        row=l.row();place=row.row();place.enabled=_task is None;place.operator('halo_bridge.place')
+        row=l.row();place=row.row();place.enabled=_task is None;place.operator('halo_bridge.place',depress=on,icon='ADD')
         root=l;l=root.box();l.label(text='Selected Asset',icon='OBJECT_DATA')
         try:
             asset=selected(context)
@@ -1420,7 +1456,6 @@ class HBPanel(bpy.types.Panel):
         l=root.box();l.label(text='(Experimental) Sapien Map Preparation',icon='SCENE_DATA')
         l.prop(s,'export_target')
         if s.game!=s.export_target:
-            l.prop(s,'export_kit')
             l.label(text='Mixed-game meshes convert to the destination.')
         if s.export_target=='reach':
             l.label(text='Reach Sapien export is not available yet.',icon='INFO')
@@ -1433,6 +1468,8 @@ class HBPanel(bpy.types.Panel):
         l.prop(s,'lighting')
         l.prop(s,'open_sapien')
         l=root
+        l.label(text='HaloBridge Warnings and Messages',icon='INFO')
+        draw_messages(l,context)
         status=l.box();status.label(text='Map Preparation Status',icon='INFO')
         width=max(24,int(context.region.width/7))
         if _prepare_activity:
@@ -1463,7 +1500,7 @@ class HBPanel(bpy.types.Panel):
         row.scale_y=1.3;row.operator('halo_bridge.prepare',text=prepare_button_text(),icon='EXPORT',depress=True)
         row=l.row();row.enabled=_task is None;row.scale_y=1.2;row.operator('halo_bridge.open',icon='PLAY',depress=True)
 
-classes=(HBFindVehicle,HBChooseVehicle,HBVehicleStatic,HBActivityLog,HBApplyExtracted,HBAsset,HBSettings,HBDetect,HBCheckSetup,HBScan,HBIndex,HBPlace,HBClearSearch,HBCheckAssets,HBListHistory,HBListAction,HBPlaceChecked,HBImportMapScene,HBRepairMap,HBPreviewToggle,HBGround,HBScanShaders,HBChooseShader,HBShader,HBChooseSky,HBRefreshSkies,HBPrepare,HBConfirmPrepare,HBOpen,HBResolve,HBCancel,HBDiagnostics,HBReportDiagnostics,HBSelectCollisionIssues,HBCenterMapOrigins,HB_UL_assets,HBMessages,HBMessagesPopover,HBPanel)
+classes=(HBChooseMap,HBFindVehicle,HBChooseVehicle,HBVehicleStatic,HBActivityLog,HBApplyExtracted,HBAsset,HBSettings,HBDetect,HBCheckSetup,HBScan,HBIndex,HBPlace,HBClearSearch,HBCheckAssets,HBListHistory,HBListAction,HBPlaceChecked,HBImportMapScene,HBRepairMap,HBPreviewToggle,HBGround,HBScanShaders,HBChooseShader,HBShader,HBChooseSky,HBRefreshSkies,HBPrepare,HBConfirmPrepare,HBOpen,HBResolve,HBCancel,HBDiagnostics,HBReportDiagnostics,HBSelectCollisionIssues,HBCenterMapOrigins,HB_UL_assets,HBMessages,HBMessagesPopover,HBPanel)
 
 @persistent
 def load_catalogue(_=None):

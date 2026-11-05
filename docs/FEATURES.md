@@ -2,7 +2,7 @@
 
 ## Halo 3 and Halo: Reach
 
-Use **Import game**, above **Folders and Setup**, to select **Halo 3** or **Halo: Reach**. Each game remembers its folders, map filename, storage and catalogue. Save the blend file to retain these settings. Switching does not delete scene objects. Reach assets can share a scene with Halo 3 assets. Both import games use the same menus. Keep **Import game** on Reach if desired, set **Export to Sapien** to **Halo 3**, verify the **Halo 3 export Editing Kit** folder, then use **Prepare current scene for sapien**. Sky choices and shader assignments use the export destination kit. Output level name and selected sky stay unchanged when switching import games. Reach meshes are converted to static Halo 3 geometry with generated collision and converted preview textures. Existing Reach objects do not need reimporting. See [Reach conversion](REACH.md).
+Use **Import game**, above **Folders and Setup**, to select **Halo 3** or **Halo: Reach**. Each game remembers its folders, map filename, storage and catalogue. Save the blend file to retain these settings. Switching does not delete scene objects. Reach assets can share a scene with Halo 3 assets. Both import games use the same menus. Keep **Import game** on Reach if desired, set **Export to Sapien** to **Halo 3**, verify the Halo 3 Editing Kit folder under **Folders and Setup**, then use **Prepare current scene for sapien**. Sky choices and shader assignments use the export destination kit. Output level name and selected sky stay unchanged when switching import games. Reach meshes are converted to static Halo 3 geometry with generated collision and converted preview textures. Existing Reach objects do not need reimporting. See [Reach conversion](REACH.md).
 
 **Origin to Geometry - all scene meshes** uses Blender's native median geometry center on every mesh, including authored, hidden and previously centered objects, preserving visible geometry and selection. Use Object Mode; Blender Undo is available. Linked library meshes must be made local first.
 
@@ -169,3 +169,12 @@ Background: [c20 Halo 3 scenario reference](https://c20.reclaimers.net/h3/tags/s
 Errors and preparation warnings have boxed notices and larger alert headings. Resolve Conflict and Cancel use native red alert styling. Prepare, Open in Sapien and Continue with warnings use the selected-button highlight (blue in Blender's standard theme). Continue also has a checkmark. Individual green operator-button fills are not available through the native sidebar layout; HaloBridge does not change the user's global theme.
 
 Static mesh preparation rebuilds collision from collidable Blender surfaces. Original Halo assets often contain collision models, but this route currently does not reuse those tags. The original-vehicle route does reuse the vehicle tag and its collision. Reusing other original collision safely requires verifying the source asset and whether its geometry has been edited; visible meshes alone are not equivalent to their original collision data.
+
+## v0.9 interface refresh
+
+- **Choose .map file:** searchable dropdown lists maps from the selected game folder, alongside an editable filename field.
+- **Warnings where you need them:** a second HaloBridge Warnings and Messages section sits above Map Preparation Status. The original top panel remains; both show the same errors and action buttons.
+- **Preview status:** green ON / red OFF icons, with Place Asset(s) highlighted while previewing. No flashing or global theme changes.
+- **One Editing Kit setup:** preparation reuses the Halo 3 path saved under Folders and Setup. The duplicate export-kit path field has been removed.
+
+The dropdown scans when opened, not continuously during sidebar redraws. Choosing a map fills the filename without starting an import. Preview indicator colors follow Blender theme settings.

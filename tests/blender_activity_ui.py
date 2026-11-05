@@ -13,6 +13,7 @@ drawn=[]
 class Layout:
     def row(self,**kw):return self
     def box(self,**kw):return self
+    def column(self,**kw):return self
     def grid_flow(self,**kw):return self
     def separator(self,**kw):pass
     def prop(self,*args,**kw):drawn.append(('prop',args[1],kw))

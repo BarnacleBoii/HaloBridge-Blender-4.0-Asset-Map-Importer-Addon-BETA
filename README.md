@@ -20,6 +20,13 @@ Follow the [installation guide](docs/INSTALLATION.md) for requirements and setup
 
 ## New in v0.9
 
+Latest interface refresh:
+
+- **Choose .map file:** searchable dropdown lists maps from the selected game folder, alongside an editable filename field.
+- **Warnings where you need them:** a second HaloBridge Warnings and Messages section sits above Map Preparation Status. The original top panel remains; both show the same errors and action buttons.
+- **Preview status:** green ON / red OFF icons, with Place Asset(s) highlighted while previewing. No flashing or global theme changes.
+- **One Editing Kit setup:** preparation reuses the Halo 3 path saved under Folders and Setup. The duplicate export-kit path field has been removed.
+
 - Shared Halo 3/Reach menus, including material, sky, collision and preparation controls.
 - Prepare Reach assets for Halo 3 without switching import games.
 - Swap multiple greybox cubes or placed objects for a chosen asset, using its original scale.

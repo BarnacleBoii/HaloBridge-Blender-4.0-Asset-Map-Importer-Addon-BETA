@@ -29,5 +29,5 @@ def destination(settings):
         return SimpleNamespace(kit=settings.kit,cache=settings.cache,maps=settings.maps,game=game)
     profiles=json.loads(settings.game_profiles or '{}')
     profile=profiles.get(game) or detected(game)
-    kit=settings.export_kit or profile.get('kit','')
+    kit=profile.get('kit','')
     return SimpleNamespace(kit=kit,cache=profile.get('cache',''),maps=profile.get('maps',''),game=game)
