@@ -17,7 +17,7 @@ GitHub's automatic **Source code** ZIP/TAR downloads are for development and do 
 
 Follow the [installation guide](docs/INSTALLATION.md) for requirements and setup. **Draft releases are review builds and are not available as published downloads.**
 
-## Requirements — Blender importing or Sapien testing?
+## Requirements
 
 **MCC maps provide the models and textures. Mod Tools provide editable tags and the Sapien compilation tools.** You do not need to prepare a Sapien level to use HaloBridge assets in Blender.
 | Component | Required version / setup |
@@ -77,7 +77,7 @@ Build a small scene and follow the [first-map tutorial](docs/FIRST-MAP.md) to te
 
 **Sapien preparation is experimental and targets Halo 3 only.** Reach assets can be converted into static Halo 3 geometry; native Reach Sapien export is not implemented. It exports your current meshes and generates collision from their surfaces. Explicitly marked Halo 3 vehicle previews can instead use their original vehicle tags; see [Original Halo 3 vehicles](docs/FEATURES.md#original-halo-3-vehicles). It does not reconstruct original AI, scripts, animated doors, breakable objects, multiplayer rules, or baked lighting. A whole-map import is a visual starting point, not a complete recovered playable mission.
 
-Some assets are missing or approximate, and invalid or oversized geometry can fail Halo's compiler. Preview materials are approximations; Halo 3 exports use installed shader tags, while Reach exports generate simplified Halo 3 shaders from preview textures. Large Project Reclaimer maps and multiplayer packaging need further testing. Start with a small level and keep your saved work.
+ Invalid or oversized geometry can fail Halo's compiler. Preview materials are approximations; Halo 3 exports use installed shader tags, while Reach exports generate simplified Halo 3 shaders from preview textures. Large Project Reclaimer maps and multiplayer packaging need further testing. Start with a small level and keep your saved work.
 
 ## Guides
 
