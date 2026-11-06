@@ -36,7 +36,7 @@ def _peak_memory(process):
     ok=ctypes.windll.psapi.GetProcessMemoryInfo(wintypes.HANDLE(int(process._handle)),ctypes.byref(c),c.cb)
     return c.PeakWorkingSetSize if ok else 0
 
-def run_process(args, log, cwd=None, cancel=None, status=None):
+def run_process(args, log, cwd=None, cancel=None, status=None, structure=None):
     log=Path(log);log.parent.mkdir(parents=True,exist_ok=True)
     flags=getattr(subprocess,'CREATE_NO_WINDOW',0)
     with log.open('w',encoding='utf-8') as stream:
@@ -59,7 +59,7 @@ def run_process(args, log, cwd=None, cancel=None, status=None):
             if p.poll() is None: p.kill();p.wait()
             write_json(log.with_suffix('.metrics.json'),dict(seconds=time.perf_counter()-started,peak_working_set_bytes=peak,exit_code=p.returncode))
     text=log.read_text(encoding='utf-8',errors='replace')
-    errors=compiler_errors(text)
+    errors=compiler_errors(text, structure if p.returncode == 0 else None)
     if p.returncode or errors:
         raise ValidationError(errors or ['Process exited with code '+str(p.returncode)+'.\n'+text],
                               'External job failed; full log: '+str(log))
@@ -78,7 +78,9 @@ def extract(asset, config, cancel=None):
         mapped=asset.get('mapping')
         if not mapped: return Path(asset['path'])
         asset=mapped
-    cache=Path(config['cache'])/'assets'/asset['id']; stamp=cache/'stamp.json'
+    cache=Path(config['cache'])/'assets'/asset['id']
+    if asset['kind'] in ('model','scenery'):cache=cache/'model_parts_v2'
+    stamp=cache/'stamp.json'
     # Resource cache updates can change an asset even if the selected map does not.
     resources=sorted(Path(asset['map']).parent.glob('*.map'))
     signature={'extractor':4,'files':[fingerprint(p) for p in resources], 'tag':asset['tag'],'section':asset['section']}

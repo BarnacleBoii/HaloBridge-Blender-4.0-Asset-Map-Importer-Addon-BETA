@@ -14,12 +14,12 @@ MCC supplies compiled map geometry and textures. Mod Tools supply editable tags 
 | [Windows](https://www.microsoft.com/windows/) | x64; other operating systems unsupported |
 | [Blender 4.0](https://download.blender.org/release/Blender4.0/) | **4.0**, tested with 4.0.0; newer Blender releases are not supported by this build |
 | [HaloBridge v0.9](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases/tag/v0.9) | Install **HaloBridge-0.9.0.zip**, not a source archive |
-| [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **2.364.0 (v364)** installed and enabled; HaloBridge checks this version during object placement and export, including Reach objects |
+| [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **2.364.0 (v364) or 2.432.0 (v432)** installed and enabled; HaloBridge checks this version during object placement and export, including Reach objects |
 | [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) | **10, Windows x64**, for the bundled extraction helper; the base runtime alone is not the Desktop Runtime |
 | [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8 or newer**, for the Editing Kit/tag helper; checked by Check setup |
 | [Halo: Master Chief Collection](https://store.steampowered.com/app/976730/Halo_The_Master_Chief_Collection/) | Fully Installed; Halo 3 or Reach |
 
-Dependency downloads: [Blender 4.0 archives](https://download.blender.org/release/Blender4.0/), [Halo Blender toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset), [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0), [.NET Framework 4.8](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48). Use the toolset's v364 release, not an arbitrary latest version.
+Dependency downloads: [Blender 4.0 archives](https://download.blender.org/release/Blender4.0/), [Halo Blender toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset), [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0), [.NET Framework 4.8](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48). Use toolset v364 or v432, not an arbitrary latest version.
 
 ### Why the Halo Asset Blender Development Toolset is required
 
@@ -29,7 +29,7 @@ HaloBridge provides the asset browser, map extraction, previews, placement tools
 
 **Why install it if I only want assets in Blender?** In v0.9, HaloBridge's individual-object placement path checks and enables this toolset before creating an asset, including Reach assets. Preparation also uses its material flags and exporter. The MCC extraction helper itself does not use the toolset to read textures or list map assets. This is a dependency of the current HaloBridge integration, not a claim that all MCC extraction inherently needs a Blender exporter. Install it for the supported browsing/placement workflow even if you do not plan to use Sapien.
 
-**Why exactly v364 / 2.364.0?** That is the version the integration was verified against, including its ASS export options and coordinate conversion. HaloBridge explicitly rejects other versions; a newer toolset release is not automatically compatible. You normally use HaloBridge's buttons rather than manually exporting an ASS file. The toolset does not supply game maps, textures, tags, Tool or Sapien, and does not replace MCC or H3EK.
+**Which toolset versions can I use?** Both versions are supported by the integration, including its ASS export options and coordinate conversion. HaloBridge explicitly rejects other versions; a newer toolset release is not automatically compatible. You normally use HaloBridge's buttons rather than manually exporting an ASS file. The toolset does not supply game maps, textures, tags, Tool or Sapien, and does not replace MCC or H3EK.
 
 ### What the other components provide
 
@@ -55,7 +55,7 @@ You do not need a standalone Reclaimer installation, Osoyoos, or a manually expo
 ## 2. Install Blender dependencies and HaloBridge
 
 1. Install Windows x64 Blender 4.0 and the runtimes listed above. Restart Blender after installing runtimes.
-2. Download the **v364 / 2.364.0** Halo Blender toolset from its project releases. Follow its release installation instructions, enable it in Blender, and verify its version in Preferences.
+2. Download the **v364 or v432** Halo Blender toolset from its project releases. Follow its release installation instructions, enable it in Blender, and verify its version in Preferences.
 3. Open the [HaloBridge v0.9 release](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases/tag/v0.9). Expand **Assets** and download **HaloBridge-0.9.0.zip**.
 4. In Blender, save your work, then open **Edit → Preferences → Add-ons → Install**. Select that ZIP without unzipping it.
 5. Enable **HaloBridge - Blender 4.0 Importing**. Keep the Halo Blender toolset enabled too. Save Preferences if automatic preference saving is disabled.
@@ -71,7 +71,7 @@ The attached **HaloBridge-0.9.0-source.zip** is for developers, not installation
 4. If using Editing Kit features, set its field to the tool installation root containing `tool.exe`, not the `tags` or `data` subdirectory.
 5. Choose **Check setup** and read the full report. **This is currently a full-workflow checker, not an import-only readiness test.** It checks Editing Kit executables, ManagedBlam, runtimes, and (for Halo 3) a default scenario even when you only intend to import. Missing kit/tag messages can be unrelated to map indexing or visual layout extraction. Do not ignore runtime, map-resource, exporter or extraction errors.
 6. Under **Choose .map file**, use the arrow to search available filenames or type one, including `.map`.
-7. Choose **Import Map Assets** for a browser, or **Import entire .map** for a static layout. See the [Blender-only guide](IMPORTING.md).
+7. Choose **Index Map Assets** for a browser, or **Import entire .map** for a static layout. See the [Blender-only guide](IMPORTING.md).
 
 Switching import games remembers separate folders and catalogues. Save your `.blend` to retain those profiles. It does not remove scene objects. For an individual Halo 3 BSP instance that fails with a collision/tag-helper error, complete the H3EK setup below; MCC-only placement is not supported for that route yet.
 

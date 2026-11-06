@@ -4,7 +4,7 @@
 
 ## Supported target
 
-Windows x64, Blender 4.0.0, Halo exporter 2.364.0, and locally installed PC MCC maps. H3EK with extracted tags is required for Halo 3 Sapien preparation and the current individual Halo 3 BSP-instance placement route; see the [requirements matrix](INSTALLATION.md#requirements). Experimental MCC Halo: Reach importing and static conversion into Halo 3 are also available. Other exporter versions, console inputs and universal MCC conversion are not supported.
+Windows x64, Blender 4.0.0, Halo exporter v364 or v432, and locally installed PC MCC maps. H3EK with extracted tags is required for Halo 3 Sapien preparation and the current individual Halo 3 BSP-instance placement route; see the [requirements matrix](INSTALLATION.md#requirements). Experimental MCC Halo: Reach importing and static conversion into Halo 3 are also available. Other exporter versions, console inputs and universal MCC conversion are not supported.
 
 ## Current limits
 
@@ -34,3 +34,5 @@ Future work may improve these areas, but this is not a promise of complete map r
 Check setup currently checks full-workflow prerequisites even for Blender-only use. Indexing and visual extraction do not automatically require every reported Editing Kit feature. Individual Halo 3 BSP-instance placement is an exception: it calls the tag helper for collision data. The minimum-dependency import-only configuration has not been validated on a second clean machine.
 
 Halo 3 is the only Sapien destination. Reach importing/static conversion is experimental. Halo CE, Halo 2, ODST and Halo 4 are reserved in the shared framework but are not enabled.
+
+Painted terrain exports as a baked UV tile. Large surfaces may lose detail. Masked colors apply to static geometry. Original vehicle placements use the colors supplied by their tags. [Editable materials](EDITABLE-MATERIALS.md).

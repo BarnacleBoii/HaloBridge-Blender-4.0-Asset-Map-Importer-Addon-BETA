@@ -26,18 +26,18 @@ Follow the [installation guide](docs/INSTALLATION.md) for requirements and setup
 | [Blender 4.0](https://download.blender.org/release/Blender4.0/) | 4.0; tested with 4.0.0 |
 | [Halo: The Master Chief Collection](https://store.steampowered.com/app/976730/Halo_The_Master_Chief_Collection/) | Fully Installed PC game, Including Halo 3 or Reach installed |
 | [Halo 3 Mod Tools Editing Kit](https://store.steampowered.com/app/1695791/Halo_3_Mod_Tools__MCC/) | Tool, Sapien and extracted data/tag archives |
-| [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **2.364.0 (v364)** installed and enabled; other exporter versions are rejected |
+| [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **2.364.0 (v364) or 2.432.0 (v432)** installed and enabled; other exporter versions are rejected |
 | [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) | **10**, Windows **x64** Desktop Runtime, not only the base .NET runtime |
 | [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8 or newer** |
 
 
-All users need **Windows x64, Blender 4.0, the supported Halo Blender toolset 2.364.0, and .NET 10 Desktop Runtime x64**. The tag helper uses **.NET Framework 4.8+**. Check setup currently checks full-workflow prerequisites even for import-only users; MCC alone does not support every current placement route. Halo 3 is the only implemented Sapien destination.
+All users need **Windows x64, Blender 4.0, the supported Halo Blender toolset v364 or v432, and .NET 10 Desktop Runtime x64**. The tag helper uses **.NET Framework 4.8+**. Check setup currently checks full-workflow prerequisites even for import-only users; MCC alone does not support every current placement route. Halo 3 is the only implemented Sapien destination.
 
 Start with the **[detailed installation guide and requirements matrix](docs/INSTALLATION.md#requirements)**, then choose **[Blender-only importing](docs/IMPORTING.md)** or **[First Sapien test map](docs/FIRST-MAP.md)**. No game maps, models, textures, tags or Editing Kit libraries are bundled. You do not need a standalone Reclaimer installation or a manually exported asset library.
 
 ## New in v0.9
 
-Latest interface refresh:
+Start with [the feature index](docs/FEATURES.md) for step-by-step controls. This public beta adds model part selection and separation, [paintable terrain and editable colors](docs/EDITABLE-MATERIALS.md), and shader lookup by indexed source map.
 
 - **Choose .map file:** searchable dropdown lists maps from the selected game folder, alongside an editable filename field.
 - **Warnings where you need them:** a second HaloBridge Warnings and Messages section sits above Map Preparation Status. The original top panel remains; both show the same errors and action buttons.
@@ -67,7 +67,7 @@ See the [release notes](RELEASE-NOTES.md) for changes, validation and remaining 
 3. [Import Game] Choose the game you want to extract assets from(example: "Halo 3").
 4. Under [Folders and Setup] We can click **Detect folders** which finds folders automatically or manually type the folder paths: the "Halo 3 Editing Kit" is the file path for the Steam Halo Mod Tools Folder Location and the "Halo 3 .map Files" is where the Games Folders .map files are(steamapps\common\Halo The Master Chief Collection\halo3\maps) or wherever your .map file is you want to extract from, then **Check setup**. Its report checks the full workflow; see the requirements matrix if you only need Blender importing.
 5. Enter a map filename such as `010_jungle.map` or Choose from the dropdown menu
-6. For Importing individual assets click "Import Map Assets", For Entire map imports click "Import entire .map"
+6. For Importing individual assets click "Index Map Assets", For Entire map imports click "Import entire .map"
 7. Scroll Down a little bit in the HaloBridge Menu to see "Asset List", you can toggle categories like Structures, Vegetation, Materials, Rocks, and Water or search for certain assets like "tree", "chief", "scorpion"
 8. **Preview Mode** ON, allows you to select an asset from the list and temporarily render at the 3D cursor until you [Place Asset] which automatically turns **Preview Mode** off.
   

@@ -8,7 +8,7 @@ from .diagnostics import ValidationError
 
 def reach_materials(objects):
     return {m.as_pointer():m for o in objects for m in o.data.materials
-            if m and not m.name.startswith('+') and m.get('hb_shader_game')!='halo3' and (o.get('hb_game')=='reach' or m.get('hb_game')=='reach')}
+            if m and not m.name.startswith('+') and (m.get('hb_custom_shader') or (m.get('hb_shader_game')!='halo3' and (o.get('hb_game')=='reach' or m.get('hb_game')=='reach')))}
 
 
 def texture(socket):
@@ -62,9 +62,17 @@ def prepare(objects,folder,progress=None,materials=None):
     folder=Path(folder);folder.mkdir(parents=True,exist_ok=True)
     result={};issues=[]
     materials=reach_materials(objects) if materials is None else materials
+    custom_ids=set()
     for index,(pointer,mat) in enumerate(materials.items(),1):
-        progress(f'Converting Reach material {index}/{len(materials)}: '+mat.get('hb_label',mat.name))
+        progress(f'Preparing material {index}/{len(materials)}: '+mat.get('hb_label',mat.name))
         try:
+            if mat.get('hb_custom_shader'):
+                from . import editable_materials
+                import uuid
+                if mat.get('hb_custom_id') in custom_ids:mat['hb_custom_id']=uuid.uuid4().hex
+                custom_ids.add(mat.get('hb_custom_id'))
+                result[pointer]=editable_materials.bake(mat,folder,progress)
+                continue
             bsdf=next((n for n in mat.node_tree.nodes if n.type=='BSDF_PRINCIPLED'),None) if mat.use_nodes else None
             if not bsdf:raise ValueError('No Principled preview material found.')
             base=texture(bsdf.inputs['Base Color']);normal=texture(bsdf.inputs['Normal']);alpha=texture(bsdf.inputs['Alpha']) if mat.blend_method!='OPAQUE' else None
@@ -89,5 +97,5 @@ def prepare(objects,folder,progress=None,materials=None):
                 maps[label]=str(path)
             result[pointer]=dict(name=key,tiling=tile,maps=maps)
         except Exception as error:issues.append(mat.get('hb_label',mat.name)+': '+str(error))
-    if issues:raise ValidationError(issues,'Reach material conversion')
+    if issues:raise ValidationError(issues,'Material conversion')
     return result

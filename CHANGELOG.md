@@ -1,5 +1,10 @@
 ## 0.9 — shared game workflow and documentation refresh
 
+## v0.9 public early release refresh
+
+Added selectable and separable model variants, terrain painting, static color masks and support for toolset v432. Updated source-map lookup, wrapped color UV validation and reporting of recoverable instance collision diagnostics.
+
+
 - Shared Halo 3/Reach panels with independent Halo 3 export routing and one saved kit path.
 - Multi-object greybox swapping using original asset scale; map picker with manual filename entry.
 - Single-sided and open-surface handling, structure-source diagnostics, reports opening at line 1.

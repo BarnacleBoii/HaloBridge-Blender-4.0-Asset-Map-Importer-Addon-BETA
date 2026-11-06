@@ -77,7 +77,8 @@ def prepare(config, ass_file, placements, cancel=None, progress=None):
         if cancel and cancel.is_set():raise Cancelled('Cancelled')
         try:
             log=jobs/(str(time.time_ns())+'.log')
-            return run_process([kit/'tool.exe',*args],log,cwd=kit,cancel=cancel,status=ToolProgress(args[0],log,progress))
+            return run_process([kit/'tool.exe',*args],log,cwd=kit,cancel=cancel,status=ToolProgress(args[0],log,progress),
+                               structure=scenario if args[0]=='structure' else None)
         except ValidationError as error:
             names=config.get('geometry_names',{})
             def friendly(match):
@@ -127,7 +128,8 @@ def prepare(config, ass_file, placements, cancel=None, progress=None):
             warning_report=jobs/('geometry-warnings-'+str(time.time_ns())+'.txt')
             warning_report.write_text('\n'.join(config['compiler_warnings']),encoding='utf-8')
             progress(str(len(config['compiler_warnings']))+' geometry warning(s). These may appear as red debug geometry in Sapien. Report: '+str(warning_report))
-        if "=== imported structure" not in text or not target.exists():raise RuntimeError('Halo did not confirm a successful structure import.')
+        if f"=== imported structure '{scenario}' in " not in text or not target.is_file() or not target.with_suffix('.scenario_structure_bsp').is_file():
+            raise RuntimeError('Halo did not confirm the level structure import or produce its scenario and BSP tags.')
         stage(4,'Apply sky and scenario settings')
         if not previous or previous.get('sky_scenario',r'levels\multi\deadlock\deadlock')!=sky: tag_job('environment',template=sky)
         # Compilation may legitimately update derived placement fields. User edits

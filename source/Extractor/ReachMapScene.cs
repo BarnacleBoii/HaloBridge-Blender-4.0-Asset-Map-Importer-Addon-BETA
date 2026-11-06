@@ -77,6 +77,7 @@ internal sealed class ReachMapScene {
  }
 
  void AddModel(Model model,Matrix4x4 transform,string category,string label,bool bsp) {
+
   foreach(var region in model.Regions.Where(r=>r.Export)) {
    var permutations=region.Permutations.Where(p=>p.Export).ToArray();
    if(!bsp&&permutations.Length>1&&!permutations.All(p=>p.IsInstanced)) {

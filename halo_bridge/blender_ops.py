@@ -18,8 +18,8 @@ def ensure_exporter():
     if 'io_scene_halo' not in bpy.context.preferences.addons:
         raise RuntimeError('Install and enable Halo Asset Blender Development Toolset for Blender 4.0.')
     import io_scene_halo
-    if tuple(io_scene_halo.bl_info['version'])!=(2,364,0):
-        raise RuntimeError('This adapter was verified with Halo Asset Blender Development Toolset v364 (2.364.0). Use that version to avoid an incompatible ASS coordinate conversion.')
+    if tuple(io_scene_halo.bl_info['version']) not in ((2,364,0),(2,432,0)):
+        raise RuntimeError('Use Halo Asset Blender Development Toolset v364 (2.364.0) or v432 (2.432.0). Other exporter versions have not been verified with this adapter.')
 
 _material_lookup={}
 _material_count=-1
@@ -44,6 +44,7 @@ def material(meta, directory):
     m=bpy.data.materials.new(leaf(meta.get('name') or meta.get('shader')) or key)
     m['hb_material_key']=key;m['hb_conversion_id']=key
     _material_lookup[key]=m.name;_material_count=len(bpy.data.materials)
+    m['hb_texture_sources']=json.dumps(meta.get('textures',[]));m['hb_texture_directory']=str(directory)
     m['hb_shader']=meta.get('shader','');m['hb_label']=meta['name'];m.use_nodes=True
     nodes=m.node_tree.nodes;links=m.node_tree.links;bsdf=nodes.get('Principled BSDF')
     texture_names=read_json(Path(directory)/'texture_names.json',{}).get('textures',{})
@@ -71,12 +72,18 @@ def material(meta, directory):
             elif channel in (1,2,4):
                 separate=nodes.new('ShaderNodeSeparateColor');separate.mode='RGB';links.new(tex.outputs['Color'],separate.inputs[0]);links.new(separate.outputs[{1:0,2:1,4:2}[channel]],bsdf.inputs['Alpha'])
             else:links.new(tex.outputs['Color'],bsdf.inputs['Alpha'])
+    for tm in meta['textures']:
+        if tm['usage']=='color_change':
+            mask=bpy.data.images.load(str(Path(directory)/tm['path']),check_existing=True)
+            mask.colorspace_settings.name='Non-Color';m['hb_change_mask_image']=mask.name
+    from . import layered_preview
+    layered_preview.apply(m,meta,directory)
     if meta['alpha']!='opaque':
         m.blend_method='CLIP' if meta['alpha']=='clip' else 'BLEND';m.use_backface_culling=False
     return m
 
-def mesh_from_preview(preview, asset_id):
-    directory=Path(preview).parent;data=read_json(preview)
+def mesh_from_preview(preview, asset_id, data=None):
+    directory=Path(preview).parent;data=read_json(preview) if data is None else data
     mats={m['id']:material(m,directory) for m in data['materials']}
     vertices=[];faces=[];uvs=[];normals=[];face_mats=[];order=list(mats)
     for part in data['meshes']:
@@ -95,10 +102,12 @@ def mesh_from_preview(preview, asset_id):
 def place(asset, path, config, location=None):
     ensure_exporter()
     mapped=asset.get('mapping',asset);key=asset['id']
-    mesh=next((m for m in bpy.data.meshes if m.get('hb_asset_id')==key),None)
+    policy=read_json(path).get('selection_policy',0) if Path(path).suffix.lower()=='.json' else 0
+    mesh=next((m for m in bpy.data.meshes if m.get('hb_asset_id')==key and m.get('hb_selection_policy',0)==policy),None)
     if not mesh:
         if Path(path).suffix.lower()=='.json':mesh=mesh_from_preview(path,key)
         else:mesh=import_legacy(path,key)
+        mesh['hb_selection_policy']=policy
     obj=bpy.data.objects.new(asset['name'],mesh);bpy.context.collection.objects.link(obj)
     obj.location=location if location is not None else bpy.context.scene.cursor.location
     obj.scale=(100,100,100);obj['hb_working_units']=100
@@ -108,6 +117,14 @@ def place(asset, path, config, location=None):
     obj['hb_collision']='tag' if mapped['kind']=='scenery' else ('original' if (Path(path).parent/'collision.json').exists() else 'missing')
     obj['hb_source_tag']=mapped.get('tag','');obj['hb_section']=mapped.get('section',-1)
     obj['hb_mesh_signature']=mesh_signature(mesh)
+    if policy:
+        details=read_json(path)
+        obj['hb_model_selection']=json.dumps(details.get('selection',[]))
+        obj['hb_import_warnings']=json.dumps(details.get('warnings',[]))
+        if (Path(path).parent/'parts.json').is_file():
+            obj['hb_parts_path']=str(Path(path).parent/'parts.json')
+            obj['hb_parts_enabled']=json.dumps(sorted({p['choice'] for p in details['meshes']}))
+            obj['hb_parts_signature']=mesh_signature(mesh)
     bpy.ops.object.select_all(action='DESELECT');obj.select_set(True);bpy.context.view_layer.objects.active=obj
     return obj
 
@@ -258,7 +275,7 @@ def export_scene(config,path):
                     bm.to_mesh(mesh);bm.free();mesh.update()
             units=float(obj.get('hb_working_units',1 if obj.get('hb_id') else source.get('hb_working_units',1)))
             new=bpy.data.objects.new(('%' if obj.get('hb_id') else '')+obj.name,mesh_cache[key]);temp.collection.objects.link(new);new.matrix_world=Matrix.Scale(1/units,4)@obj.matrix_world
-            # Tool converts ASS units to world units by /100. The v364 ASS
+            # Tool converts ASS units to world units by /100. The v364/v432 ASS
             # exporter scales vertices but leaves instance translations alone.
             new.matrix_world.translation=obj.matrix_world.translation*(100/units)
         temp.unit_settings.scale_length=3.048

@@ -2,7 +2,7 @@
 from pathlib import Path
 import math
 import bpy
-from . import cross_game
+from . import cross_game,editable_materials
 
 def shader_file(kit,tag):
     tag=tag.replace('/','\\')
@@ -37,7 +37,16 @@ def inspect(objects,config):
                 if mat.name.startswith('+'):continue
                 try:
                     is_reach=mat.get('hb_shader_game')!='halo3' and (obj.get('hb_game')=='reach' or mat.get('hb_game')=='reach')
-                    if is_reach:
+                    if mat.get('hb_custom_shader'):
+                        editable_materials.validate(mat)
+                        if not mesh.uv_layers.active:raise ValueError('Editable materials require a UV map.')
+                        for face in (() if editable_materials.repeats_on_uv_tiles(mat) else mesh.polygons):
+                            if face.material_index==index:
+                                for loop in face.loop_indices:
+                                    uv=mesh.uv_layers.active.data[loop].uv
+                                    if any(v < -0.0001 or v > 1.0001 for v in uv):raise ValueError('Editable paint textures need UVs inside 0-1. Unwrap this surface into one UV tile; use layer tiling controls for repeats.')
+                        reach[mat.as_pointer()]=mat
+                    elif is_reach:
                         bsdf=next((n for n in mat.node_tree.nodes if n.type=='BSDF_PRINCIPLED'),None) if mat.use_nodes else None
                         if bsdf is None:raise ValueError('No supported Principled preview material.')
                         for socket in ('Base Color','Normal','Alpha'):

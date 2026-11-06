@@ -4,13 +4,13 @@ from collections import Counter
 from pathlib import Path
 import bpy
 from mathutils import Vector, Matrix
-from . import blender_ops, cross_game, export_review, vehicles, collision_policy
+from . import blender_ops, cross_game, export_review, vehicles, collision_policy, invisible_blocks
 from .catalog import read_json
 from .diagnostics import ValidationError
 
 
 def objects(scene):
-    return [o for o in scene.objects if o.type=='MESH' and not o.get('hb_preview') and not vehicles.selected_vehicle(o)
+    return [o for o in scene.objects if o.type=='MESH' and not o.get('hb_preview') and not vehicles.selected_vehicle(o) and not invisible_blocks.selected(o)
             and (o.get('hb_map_reference') or not o.get('hb_ignore'))]
 
 
@@ -30,7 +30,9 @@ def warnings(scene):
         data=read_json(manifest,{})
         if data.get('decoded_bsps',0)<data.get('expected_bsps',0):
             result.append('The import is incomplete: only geometry currently present in Blender will be exported. Missing terrain will remain missing.')
-    if cross_game.reach_materials(objects(scene)):
+    if any(m and m.get('hb_custom_shader') for o in objects(scene) for m in o.data.materials):
+        result.append('Editable materials are baked into level-local textures and shaders. Save your painted images in the blend. Dynamic Halo color changes, reflections and layered shader behavior are not preserved in this baked result.')
+    if any(not m.get('hb_custom_shader') for m in cross_game.reach_materials(objects(scene)).values()):
         result.append("Reach assets become static Halo 3 geometry with generated collision and converted preview textures. Layered shaders, water, glow and animated behavior are approximated; transparency uses cutout alpha.")
     return result
 
@@ -38,6 +40,7 @@ def warnings(scene):
 def export(config,path,progress=None):
     progress=progress or (lambda message:None)
     source=bpy.context.scene;depsgraph=bpy.context.evaluated_depsgraph_get()
+    blockers=invisible_blocks.plan(source,config)
     config['vehicle_placements']=vehicles.plan(source,config)
     for placement in config['vehicle_placements']:progress('Original vehicle placement: '+placement['tag']+' (excluded from static geometry)')
     selected=[o for o in objects(source) if not is_sky(o)]
@@ -190,7 +193,7 @@ def export(config,path,progress=None):
             units=obj['hb_working_units'];obj.matrix_world=Matrix.Scale(1/units,4)@obj.matrix_world;obj['hb_working_units']=1
         progress(f'{len(selected)}/{len(selected)} assets processed. Writing geometry file; waiting for the Blender exporter...')
         bpy.context.window.scene=temp
-        return blender_ops.export_scene(config,path)
+        return blender_ops.export_scene(config,path)+blockers
     finally:
         bpy.context.window.scene=old
         for obj in list(temp.objects):bpy.data.objects.remove(obj,do_unlink=True)

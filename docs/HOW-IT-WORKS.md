@@ -57,3 +57,5 @@ Helpers exchange JSON jobs and results with the add-on. No online account or clo
 ## Shared game framework
 
 The import profile chooses maps/catalogue/cache; the export destination chooses kit/shaders/skies/compiler. `halo_bridge/games.py` centralizes capabilities. Adding another game requires a validated extraction/conversion adapter, not just adding a dropdown label. The shared sidebar uses the same preview, organization, diagnostics and preparation components for Halo 3 and Reach.
+
+Editable materials have a separate export route. Preparation bakes the supported Blender material graph, imports level-local bitmaps and builds Halo 3 shader tags. See [Editable materials](EDITABLE-MATERIALS.md).

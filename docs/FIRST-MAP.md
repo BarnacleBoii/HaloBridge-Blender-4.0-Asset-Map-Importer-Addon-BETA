@@ -8,7 +8,7 @@ Start with a floor and a few trees or rocks. A small scene makes it easier to id
 
 ## 1. Find assets
 
-After completing the [H3EK preparation setup](INSTALLATION.md#4-add-halo-3-sapien-preparation), select or type `010_jungle.map` in **Choose .map file** and choose **Import Map Assets**. Indexing creates a searchable list; it does not extract every asset immediately.
+After completing the [H3EK preparation setup](INSTALLATION.md#4-add-halo-3-sapien-preparation), select or type `010_jungle.map` in **Choose .map file** and choose **Index Map Assets**. Indexing creates a searchable list; it does not extract every asset immediately.
 
 Use **Search Assets**, category buttons, and **Level Imported** to narrow the list. Unknown categories are still shown. **All Levels** shows entries from every indexed map.
 
@@ -32,7 +32,7 @@ You can also greybox with cubes, select several, then use **Swap selected object
 
 ## 4. Choose the sky and output
 
-Choose **Find map skies**, then select **Sky from map**. Automatic selection uses a single imported map's primary sky, otherwise High Ground. This reads your Editing Kit tags, so the source scenario must be installed.
+Choose **Scan for map skies**, then select **Sky**. Automatic selection uses a single imported map's primary sky, otherwise High Ground. This reads your Editing Kit tags, so the source scenario must be installed.
 
 Enter an **Output Level Name (without .map)** such as `my_first_map`: 3–32 lowercase letters, digits or underscores, starting with a letter, without `.map`. Use a new name for this first test, especially if an older version created an original-map copy.
 
@@ -71,3 +71,5 @@ Mesh reshaping and modifiers cannot be transferred to an existing vehicle tag. O
 Save and restart Blender after updating before using this feature. Vehicle tag creation was verified with the Scorpion; driving, multiplayer rules, respawn tuning and Project Reclaimer behavior need in-game testing.
 
 Background: [c20 Halo 3 scenario reference](https://c20.reclaimers.net/h3/tags/scenario/) and [Microsoft Halo 3 instance geometry](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/art/instanceobjects/instanceobjectshome). Original vehicle tags and static instance geometry are different export routes.
+
+For a painted floor, follow [Paint terrain](EDITABLE-MATERIALS.md#paint-terrain) before preparing. Pack the images and save your blend.

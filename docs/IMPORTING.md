@@ -8,7 +8,7 @@ You can use HaloBridge to browse assets, assemble a scene, or inspect an origina
 
 1. Select the import game and set its maps folder under **Folders and Setup**.
 2. Use **Choose .map file** to search filenames or type one. The picker only sets the filename; it does not start extraction.
-3. Click **Import Map Assets**. This builds the catalogue, not a scene containing every asset.
+3. Click **Index Map Assets**. This builds the catalogue, not a scene containing every asset.
 4. Use **Search Assets**, category toggles and **Level Imported** to find entries. Indexed entries are not necessarily extracted yet. Keep other categories enabled if filtering would hide the item you need.
 5. Enable **Preview Mode** and click an entry. First use extracts its geometry/textures and caches them. ON has a green status icon; OFF has a red icon. Colors follow Blender's theme. These are icons, not custom green/red button backgrounds.
 6. Move/rotate/scale a preview if desired, then click **Place asset(s)**. Single-asset placement retains the matching preview transform. Preview turns off after placement. With checked entries, bulk placement takes priority and models are placed at the 3D cursor; clear checks for single-preview placement.
@@ -37,3 +37,5 @@ Use **Shift+D** for normal duplicates or **Alt+D** for linked mesh duplicates. O
 No. Materials/shader-tag, sky and Sapien preparation settings are for game export. Leave them alone if you only need Blender assets. A Halo shader tag path is not the path to the preview image. No standalone Reclaimer application or manually exported asset library is needed.
 
 For game testing later, install/configure H3EK and follow [First Map](FIRST-MAP.md). Reach importing remains experimental; see [Reach](REACH.md) for conversion limits.
+
+After placement, select a supported model to choose visible regions or separate all variants. See [Model parts and variants](FEATURES.md#model-parts-and-variants).

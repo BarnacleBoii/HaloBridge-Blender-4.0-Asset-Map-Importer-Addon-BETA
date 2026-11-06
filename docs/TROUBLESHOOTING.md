@@ -12,7 +12,7 @@ Copies paste at the original position. Use the Outliner to select one, then move
 
 ## The Asset List is empty
 
-**Detect folders** does not index every map. Use **Choose .map file** to pick or type a valid installed `.map` filename and click **Import Map Assets**. Clear Search Assets, select **All Levels**, check category buttons, and inspect the Imported/Hidden tabs. Hiding a list entry does not hide an already placed Blender object.
+**Detect folders** does not index every map. Use **Choose .map file** to pick or type a valid installed `.map` filename and click **Index Map Assets**. Clear Search Assets, select **All Levels**, check category buttons, and inspect the Imported/Hidden tabs. Hiding a list entry does not hide an already placed Blender object.
 
 ## Preview takes a long time / whole-map import is slow
 
@@ -26,7 +26,7 @@ For Sapien, the material must reference an existing H3EK shader tag and its depe
 
 ## Wrong sky / offset imported sky
 
-Use **Find map skies → Sky from map** to explicitly choose an installed scenario's primary sky. Imported sky meshes keep source placements for visual reference, but are omitted from solid geometry during preparation. The game sky comes from the selected Editing Kit scenario. This does not convert all weather, fog, secondary skies or baked lighting from a compiled `.map`.
+Use **Scan for map skies → Sky** to explicitly choose an installed scenario's primary sky. Imported sky meshes keep source placements for visual reference, but are omitted from solid geometry during preparation. The game sky comes from the selected Editing Kit scenario. This does not convert all weather, fog, secondary skies or baked lighting from a compiled `.map`.
 
 ## “Level name must be 3–32…”
 
@@ -105,3 +105,7 @@ Check the lower **HaloBridge Warnings and Messages** panel directly above Map Pr
 ## Swap size differs from my cube
 
 This is intentional: replacement assets use their original import scale, preserving the selected objects' world position/rotation and collections. Scale the resulting placements afterward if needed. For direct placement from a preview, its edited preview transform is retained instead.
+
+## Collision edge on a Phantom or other instance
+
+When Tool confirms the structure imported successfully, HaloBridge lists an isolated degenerate instance collision edge as a warning. Walk against that asset in Sapien to check the result. Other compiler errors can still stop the build.

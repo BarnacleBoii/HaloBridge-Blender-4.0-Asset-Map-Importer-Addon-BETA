@@ -1,4 +1,4 @@
-# HaloBridge v0.9 — Beta
+# HaloBridge v0.9 — Public early release
 
 Import Halo 3 and experimental Halo: Reach assets and static map layouts into **Blender 4.0**, then optionally prepare your current scene for **Halo 3 Sapien**.
 
@@ -18,7 +18,7 @@ Use the attached source ZIP for the refreshed v0.9 build. GitHub's automatic **S
 | [Windows](https://www.microsoft.com/windows/) | 64-bit Windows |
 | [Blender 4.0](https://download.blender.org/release/Blender4.0/) | Blender **4.0**; this build does not support newer Blender versions |
 | [Halo: The Master Chief Collection](https://store.steampowered.com/app/976730/Halo_The_Master_Chief_Collection/) | Install Halo 3 and/or Reach content and retain the complete maps folder, including shared resource maps |
-| [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **2.364.0 / v364**, installed and enabled; provides Halo Blender properties and ASS export. Current individual asset placement also checks it |
+| [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **v364 or v432**, installed and enabled; provides Halo Blender properties and ASS export. Current individual asset placement also checks it |
 | [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) | **10, Windows x64 Desktop Runtime**, for extraction; not just the base runtime |
 | [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8+**, for the Editing Kit/tag helper |
 | [Halo 3 Mod Tools / H3EK](https://store.steampowered.com/app/1695791/Halo_3_Mod_Tools__MCC/) | Required for Halo 3 Sapien preparation and current individual Halo 3 BSP-instance placement; extract the supplied kit archives and retain the required tags |
@@ -32,13 +32,13 @@ See the [detailed requirements and component explanations](https://github.com/Ba
 ## How to Install
 
 1. Install Blender 4.0 and the required runtimes above.
-2. Install and enable the **Halo Asset Blender Development Toolset v364 / 2.364.0** in Blender.
+2. Install and enable the **Halo Asset Blender Development Toolset v364 or v432** in Blender.
 3. Download **HaloBridge-0.9.0.zip** from this release's Assets.
 4. In Blender, open **Edit → Preferences → Add-ons → Install**, select the ZIP without extracting it, and enable **HaloBridge - Blender 4.0 Importing**.
 5. In the 3D View, press **N** and open **HaloBridge**.
 6. Choose **Import game**, then use **Folders and Setup → Detect folders** or enter the correct paths. The maps path is MCC's game maps folder; the Editing Kit path is the kit root containing its executables.
 7. Run **Check setup** and read any issues in the context of your chosen workflow. Use **Choose .map file** to pick or type a filename.
-8. Click **Import Map Assets** to browse individual assets, or **Import entire .map** for the available static layout. Use Material Preview to view textures.
+8. Click **Index Map Assets** to browse individual assets, or **Import entire .map** for the available static layout. Use Material Preview to view textures.
 
 For Sapien, configure H3EK with extracted tags under **Folders and Setup** while Halo 3 is selected. Preparation reuses that path even when browsing Reach. Save your scene and close Sapien before building.
 
@@ -47,6 +47,11 @@ For Sapien, configure H3EK with extracted tags under **Folders and Setup** while
 [Full installation guide](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/INSTALLATION.md) · [Blender-only importing](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/IMPORTING.md) · [First Sapien test map](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/FIRST-MAP.md)
 
 ## Changes in v0.9
+
+- Choose individual model regions and variants, or separate them into editable Blender objects.
+- Preview terrain layers, paint custom terrain and recolor static models using color masks. Custom textures bake into level-local Halo 3 tags.
+- Load shader textures from an indexed source map. Repeating color materials support wrapped UVs. Successful structure builds report isolated instance collision-edge issues for inspection in Sapien.
+- Both v364 and v432 of the external Halo Blender toolset are supported.
 
 - **Shared Halo 3/Reach menus:** material, collision, sky, preparation and activity controls are available without switching back to Halo 3. Output level and sky remain selected when changing import games.
 - **Map picker:** searchable **Choose .map file** dropdown alongside manual filename entry.

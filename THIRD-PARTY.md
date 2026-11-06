@@ -8,6 +8,6 @@ Corresponding Core and Blam sources and their license are in `source/Reclaimer`;
 
 System.Drawing.Common 10.0.9 is a build dependency supplied through NuGet. Its runtime implementation is supplied by the user's installed Windows Desktop Runtime; no Microsoft runtime DLLs are bundled in the release. Rebuilding requires access to NuGet packages.
 
-The Halo Asset Blender Development Toolset is an external dependency by General-101 and contributors: https://github.com/General-101/Halo-Asset-Blender-Development-Toolset . It is not redistributed. The tested adapter uses version 2.364.0.
+The Halo Asset Blender Development Toolset is an external dependency by General-101 and contributors: https://github.com/General-101/Halo-Asset-Blender-Development-Toolset . It is not redistributed. The tested adapter supports v364 and v432.
 
 Halo assets, the Halo 3 Editing Kit, ManagedBlam, and MCC map files are external user-supplied dependencies. None are included in the public add-on or source archives. The code license does not apply to game content.

@@ -9,7 +9,7 @@ Install MCC's **Halo: Reach game content** for the `.map` files. **Halo: Reach M
 1. Select **(Experimental) Halo Reach** above Folders and Setup.
 2. Choose **Detect folders**. Verify **Reach Editing Kit** points to HREK and **Reach maps** points to MCC's haloreach/maps directory.
 3. Choose **Check setup**. The extraction helper requires .NET 10 Desktop Runtime x64. Install the supported Halo Blender toolset too; HaloBridge checks it for asset placement and scene export.
-4. Enter a filename such as **70_boneyard.map** and choose **Import Map Assets**.
+4. Enter a filename such as **70_boneyard.map** and choose **Index Map Assets**.
 5. Use search, filters, Preview Mode and Place asset(s), or **Import entire .map** for available terrain and static placements in original positions.
 
 ## Profiles and scope
@@ -48,3 +48,5 @@ Halo 3 is the only implemented Sapien destination. Reach geometry and preview ma
 ## Requirements by operation
 
 For models, textures and whole-map visual extraction, Reach data comes from MCC Reach maps and shared resources. Extracted HREK tags are not consumed by that extraction path, although Check setup still expects HREK executables. Halo 3 preparation uses H3EK and its extracted tags. See [Installation](INSTALLATION.md#requirements) for the complete distinction and shared Blender/runtime dependencies.
+
+For a static Reach shield or character, select its material slot and use [editable colors](EDITABLE-MATERIALS.md). Repeating color materials can retain wrapped UVs. Glow and gameplay remain approximations.

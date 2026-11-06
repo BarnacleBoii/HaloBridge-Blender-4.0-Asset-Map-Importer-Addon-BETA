@@ -2,16 +2,22 @@
 from pathlib import Path
 from .catalog import read_json
 import zlib
+import os
+import bpy
 from . import games
 _cache={}
 _retired=[]
 
+def normalized_path(value):
+    return os.path.normcase(os.path.normpath(bpy.path.abspath(value))) if value else ''
+
+
 def items(settings,context):
     settings=games.destination(settings)
-    key=(settings.kit,settings.cache)
+    key=(normalized_path(settings.kit),normalized_path(settings.cache))
     if key not in _cache:
-        data=read_json(Path(settings.cache)/'sky-catalogue.json',{}) if settings.cache else {}
-        rows=data.get('items',[]) if data.get('kit')==settings.kit else []
+        data=read_json(Path(key[1])/'sky-catalogue.json',{}) if settings.cache else {}
+        rows=data.get('items',[]) if normalized_path(data.get('kit',''))==key[0] else []
         entries=[('AUTO','Original map / default sky','Use the imported map sky, or the starter sky for an authored level',0)]
         for row in rows:
             name=row['scenario'];entries.append((name,row['name'],name+' — Primary sky: '+', '.join(row['skies']),(zlib.crc32(name.encode())&0x3fffffff)+1))
