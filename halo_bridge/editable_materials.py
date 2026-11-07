@@ -19,7 +19,7 @@ def make(context, mode):
     obj=context.active_object
     if not obj or obj.type!='MESH' or not obj.data.uv_layers:raise ValueError('Select a mesh with a UV map first.')
     if obj.get('hb_preview'):raise ValueError('Place the asset first before creating editable materials.')
-    if obj.get('hb_vehicle_tag'):raise ValueError('Use static mesh instead first; original vehicle tags control their own materials.')
+    if obj.get('hb_vehicle_tag') and mode!='colors':raise ValueError('Select Create editable colors for vehicle paint.')
     if obj.mode!='OBJECT':bpy.ops.object.mode_set(mode='OBJECT')
     old=obj.active_material
     if not old or not old.use_nodes:raise ValueError('Apply an imported material first.')
@@ -35,7 +35,8 @@ def make(context, mode):
         source=(image,None,tuple(chosen['tiling']))
     if not source:raise ValueError('The current material needs a base-color image. Choose a plain imported material first.')
     base,_,tile=source
-    normal=cross_game.texture(old_bsdf.inputs['Normal'])
+    layered = mode=='terrain' and any(t['usage']=='blend' for t in source_textures) and any(t.get('blend_channel') in (1,2,4,8) for t in diffuse)
+    normal=None if layered else cross_game.texture(old_bsdf.inputs['Normal'])
     mat=bpy.data.materials.new(old.name+' - Editable '+mode.title());mat.use_nodes=True
     mat['hb_custom_shader']=mode;mat['hb_custom_id']=uuid.uuid4().hex;mat['hb_bake_size']=1024
     mat['hb_source_shader']=old.get('hb_shader','');mat['hb_shader']=old.get('hb_shader','')
@@ -48,6 +49,32 @@ def make(context, mode):
     uv=nodes.new('ShaderNodeTexCoord').outputs['UV']
     bsdf=nodes.new('ShaderNodeBsdfPrincipled');bsdf.name='HaloBridge Surface'
     output=nodes.new('ShaderNodeOutputMaterial');links.new(bsdf.outputs[0],output.inputs['Surface'])
+    if layered:
+        from . import layered_preview
+        layered_preview.apply(mat,{'textures':source_textures},old['hb_texture_directory'],editable=True)
+        mat.blend_method='OPAQUE'
+        if obj.data.users>1:obj.data=obj.data.copy()
+        uv_layer=obj.data.uv_layers.active
+        loops=[i for face in obj.data.polygons if face.material_index==obj.active_material_index for i in face.loop_indices]
+        if loops:
+            low=[min(uv_layer.data[i].uv[a] for i in loops) for a in (0,1)]
+            high=[max(uv_layer.data[i].uv[a] for i in loops) for a in (0,1)]
+            if min(low)<0 or max(high)>1:
+                span=[max(hi-lo,1e-8) for hi,lo in zip(high,low)]
+                # Mask uses a unique tile; source images retain their original sample coordinates.
+                for i in loops:
+                    old_uv=uv_layer.data[i].uv.copy()
+                    uv_layer.data[i].uv=[(old_uv[a]-low[a])/span[a] for a in (0,1)]
+                for n in list(nodes):
+                    if n.type!='TEX_IMAGE' or n.name=='Paint Mask':continue
+                    mapping=n.inputs['Vector'].links[0].from_node
+                    scale=nodes.new('ShaderNodeVectorMath');scale.operation='MULTIPLY'
+                    offset=nodes.new('ShaderNodeVectorMath');offset.operation='ADD'
+                    links.new(mapping.inputs[0].links[0].from_socket,scale.inputs[0])
+                    scale.inputs[1].default_value=(*span,1);offset.inputs[1].default_value=(*low,0)
+                    links.new(scale.outputs[0],offset.inputs[0]);links.new(offset.outputs[0],mapping.inputs[0])
+        obj.data.materials[obj.active_material_index]=mat
+        return mat
     mask=bpy.data.images.new(mat.name+' Paint Mask',width=1024,height=1024,alpha=True)
     mask.colorspace_settings.name='Non-Color';mask.generated_color=(0,0,0,1) if mode=='terrain' else (1,0,0,0)
     mat['hb_mask_source']='Painted mask; Color 1 initially covers this whole material'

@@ -27,6 +27,8 @@ namespace Reclaimer.Blam.Common.Gen3
             { BlendMap, TextureUsage.BlendMap },
             { BaseMap, TextureUsage.Diffuse },
             { DetailMap, TextureUsage.DiffuseDetail },
+            { "detail_map2", TextureUsage.DiffuseDetail },
+            { "detail_map3", TextureUsage.DiffuseDetail },
             { DetailMapOverlay, TextureUsage.DiffuseDetail },
             { ChangeColorMap, TextureUsage.ColorChange },
             { BumpMap, TextureUsage.Normal },

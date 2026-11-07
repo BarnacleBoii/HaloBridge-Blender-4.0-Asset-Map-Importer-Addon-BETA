@@ -1,4 +1,4 @@
-# HaloBridge v0.9 — known limits and community testing
+# HaloBridge v0.9.1 — known limits and community testing
 
 [Home](../README.md) · [Verification history](../TESTING.md)
 
@@ -10,7 +10,7 @@ Windows x64, Blender 4.0.0, Halo exporter v364 or v432, and locally installed PC
 
 - **Static export:** doors, animated objects, breakable behavior, AI, scripts, triggers and multiplayer modes are not reconstructed. Add gameplay in Sapien separately.
 - **Original vehicles:** explicitly matched Halo 3 model previews can use existing vehicle tags. Edited vehicle meshes and Reach vehicle conversion are not supported; actual driving and multiplayer need a playtest.
-- **Collision:** generated from eligible current mesh surfaces. Opaque faces are not automatically doubled; open single-sided meshes use non-manifold surface flags. These flags do not repair arbitrary self-intersections or duplicates. Original collision shapes, special surface behavior and material distinctions are not fully retained.
+- **Collision:** Automatic tries verified original geometry, then box or current-surface fallback. Opaque faces are not automatically doubled; open single-sided meshes use non-manifold surface flags. These flags do not repair arbitrary self-intersections or duplicates. Original collision shapes, special surface behavior and material distinctions are not fully retained.
 - **Visual fidelity:** preview textures and variants can be approximate. Water, layered shaders, fog, weather and baked lighting may differ from the game.
 - **Whole-map coverage:** not every BSP or object is guaranteed to decode. Import reports identify known omissions. Campaign BSPs are assembled together rather than streamed as in game.
 - **Compilation:** imported render geometry can be invalid for Tool, exceed limits or contain overlapping surfaces. A warning confirmation cannot make invalid geometry compile.
@@ -36,3 +36,12 @@ Check setup currently checks full-workflow prerequisites even for Blender-only u
 Halo 3 is the only Sapien destination. Reach importing/static conversion is experimental. Halo CE, Halo 2, ODST and Halo 4 are reserved in the shared framework but are not enabled.
 
 Painted terrain exports as a baked UV tile. Large surfaces may lose detail. Masked colors apply to static geometry. Original vehicle placements use the colors supplied by their tags. [Editable materials](EDITABLE-MATERIALS.md).
+
+## v0.9.1 scope
+
+Original collision reuse is conditional on source identity, available tags, geometry matching and supported part selection. The fallback may change contact behavior. Recompiled static collision preserves the available shape, while gameplay, animation and detailed physics behavior depend on supported original object tags.
+
+Internal instance partitioning addresses individual render-index limits. Large terrain clusters, visibility, lighting and overall map complexity can still fail compilation or perform poorly.
+
+Regular shader preview improvements currently target supported Halo 3 albedo modes. Reach conversion, water, reflections, glow and other engine effects remain approximate. Snowbound shader and paired-face checks do not establish correctness for every material or map. Whole-map round trips and Project Reclaimer multiplayer releases need independent testing.
+

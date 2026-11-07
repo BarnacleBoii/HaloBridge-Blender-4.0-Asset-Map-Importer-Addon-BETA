@@ -33,3 +33,7 @@ Do not submit game-derived fixtures. Record tool versions and a short result sum
 `halo_bridge/games.py` is the capability registry and destination resolver. Keep import profiles separate from export settings; don't duplicate the sidebar for new games. Adding a registry label is not game support: implement and validate extraction/material/conversion adapters first. Preserve explicit failure reporting for unavailable destinations.
 
 Run `tests/blender_shared_games.py`, `tests/blender_multi_swap.py`, `tests/blender_cross_game.py`, and `tests/blender_current_geometry.py` for changes in those areas. Tests requiring game tools are separate from UI/synthetic tests. Keep documentation's requirements matrix aligned with actual helper calls and setup-check behavior.
+
+## v0.9.1 regression areas
+
+Run tests/blender_shader_choices.py for filtered shader search and active-material assignment, and tests/blender_activity_ui.py for panel drawing. Changes to original collision, temporary instance partitioning and editable materials should cover source identity, transforms, shared materials and preservation of scene geometry. Game-derived fixtures stay local and must be excluded from commits and packages.

@@ -1,3 +1,14 @@
+# v0.9.1 verification
+
+Release checks passed for all 28 Python tests, both audited ZIP archives, local documentation links, and shader-picker/panel checks against the extracted installer.
+
+- The painted Halo 3 and Reach Elite fixtures compiled together in an isolated Halo 3 level with original collision geometry. The larger Elite exported as two aligned instances. That compiler run reported no geometry warnings. Contact and multiplayer playtests remain separate.
+- The actual Jungle layered shader and editable version produced matching initial color bakes within the test tolerance. The paint operator targeted the mask, and changed mask pixels changed the baked result. This does not claim a manual brush-stroke usability test.
+- Snowbound source inspection recovered the missing detail-map parameter and two-detail-overlay options. The corrected material graph baked successfully. Paired-glass inspection found opposite-facing coincident triangles and enabled local backface culling. Interactive flicker confirmation remains pending.
+- Blender 4.0 regression checks passed for shader category switching, captured popup items, active-material assignment and panel drawing. These are programmatic checks rather than a complete mouse-driven UI test.
+
+Historical checks below describe their own build versions. They do not imply every old fixture was rerun for v0.9.1.
+
 # v0.9 validation summary
 
 The release passes 28 automated Python checks and targeted background Blender checks for shared game routing, Reach material conversion, multi-object swapping, warning confirmation and sidedness policy. UI-only checks do not prove game behavior. Isolated Halo compiler tests passed for a Citadel pine and single-sided floor. A separate user scene compiled in about 95 seconds after a reversible terrain reduction; lighting/play testing were not included, and five nonfatal warnings remained.

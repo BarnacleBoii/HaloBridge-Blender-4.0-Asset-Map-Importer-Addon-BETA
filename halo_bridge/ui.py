@@ -217,6 +217,9 @@ def export_config(context):
     result=config(context);target=games.destination(context.scene.halo_bridge)
     if not games.GAMES[target.game]['sapien_enabled']:
         raise RuntimeError('Sapien export for '+games.GAMES[target.game]['label']+' is not implemented. Choose Halo 3 to prepare mixed-game assets.')
+    settings=context.scene.halo_bridge
+    reach_profile=json.loads(settings.game_profiles or '{}').get('reach',{})
+    result['reach_collision_kit']=bpy.path.abspath(settings.kit if settings.game=='reach' else reach_profile.get('kit') or games.detected('reach').get('kit',''))
     result.update(game=target.game,kit=bpy.path.abspath(target.kit),maps=bpy.path.abspath(target.maps),cache=bpy.path.abspath(target.cache))
     return result
 
@@ -920,20 +923,32 @@ class HBScanShaders(Guard,bpy.types.Operator):
 
 class HBChooseShader(bpy.types.Operator):
     bl_idname='halo_bridge.choose_shader';bl_label='Search existing shaders'
-    bl_description='Search shaders in the selected level or category; then click Assign existing Halo shader to apply your choice'
+    bl_description='Search only the selected shader category, then assign your choice to the active material'
     bl_property='choice'
+    shader_kit:StringProperty(options={'HIDDEN','SKIP_SAVE'})
+    shader_category:StringProperty(default='ALL',options={'HIDDEN','SKIP_SAVE'})
     choice:EnumProperty(items=shader_choices.search_items)
     def invoke(self,context,event):
+        settings=context.scene.halo_bridge
+        self.shader_kit=games.destination(settings).kit
+        self.shader_category=settings.shader_level
+        self.choice='NONE'
         context.window_manager.invoke_search_popup(self)
         return {'RUNNING_MODAL'}
     def execute(self,context):
-        context.scene.halo_bridge.shader_choice=self.choice
+        settings=context.scene.halo_bridge
+        if self.shader_kit!=games.destination(settings).kit or self.shader_category!=settings.shader_level:
+            self.report({'WARNING'},'The shader category changed. Open the shader picker again.')
+            return {'CANCELLED'}
+        if self.choice=='NONE':return {'CANCELLED'}
+        settings.shader_choice=self.choice
         return {'FINISHED'}
 
 class HBShader(Guard,bpy.types.Operator):
-    bl_idname='halo_bridge.shader';bl_label='Assign existing Halo shader';bl_options={'REGISTER','UNDO'}
-    bl_description='Link the active material to the existing Halo shader tag entered above so the level uses that shader in game'
+    bl_idname='halo_bridge.shader';bl_label='Assign shader to active material';bl_options={'REGISTER','UNDO'}
+    bl_description='Set the active material slot on the selected object to use this existing Halo shader in Sapien. All objects sharing that material are affected. Use Load Halo Shader Textures/Masks to refresh the Blender preview'
     def run(self,context):
+        global _message
         from .catalog import material_name
         obj=context.active_object
         if not obj or not obj.active_material:raise RuntimeError('Select an object with an active material.')
@@ -942,6 +957,7 @@ class HBShader(Guard,bpy.types.Operator):
         if tag=='NONE':raise RuntimeError('Scan existing shaders and choose one first.')
         export_review.shader_file(games.destination(settings).kit,tag);obj.active_material['hb_shader']=tag
         obj.active_material['hb_shader_game']=settings.export_target
+        _message='Assigned '+tag.rsplit('\\',1)[-1]+' to material '+obj.active_material.name+'. Load shader textures to refresh its Blender preview.'
 
 _vehicle_items_cache={}
 
@@ -1023,12 +1039,13 @@ class HBCustomLoadImage(Guard,bpy.types.Operator):
         node=mat.node_tree.nodes.get(self.node_name)
         if not node or node.type!='TEX_IMAGE':raise RuntimeError('The texture layer changed. Choose it again.')
         image=bpy.data.images.load(self.filepath,check_existing=False)
-        if self.node_name=='Paint Mask' or 'Normal' in self.node_name:image.colorspace_settings.name='Non-Color'
+        if self.node_name in ('Paint Mask','Original Blend') or 'Normal' in self.node_name:image.colorspace_settings.name='Non-Color'
         image.pack();node.image=image
 
 class HBCustomPaint(Guard,bpy.types.Operator):
-    bl_idname='halo_bridge.custom_paint';bl_label='Paint material mask'
+    bl_idname='halo_bridge.custom_paint';bl_label='Paint selected texture'
     bl_description='Paint the selected layer on the model in Texture Paint mode; uses the active UV map'
+    paint_channel:IntProperty(default=-1)
     node_name:StringProperty(default='Paint Mask')
     layer:EnumProperty(items=[('GRASS','Grass','Black mask: grass'),('ROCK','Rock','Red mask: rock'),('DIRT','Dirt','Green mask: dirt')])
     def run(self,context):
@@ -1039,7 +1056,20 @@ class HBCustomPaint(Guard,bpy.types.Operator):
         mat.node_tree.nodes.active=node
         if obj.mode!='TEXTURE_PAINT':bpy.ops.object.mode_set(mode='TEXTURE_PAINT')
         paint=context.tool_settings.image_paint;paint.mode='IMAGE';paint.canvas=node.image
-        if paint.brush and self.node_name=='Paint Mask':paint.brush.color={'GRASS':(0,0,0),'ROCK':(1,0,0),'DIRT':(0,1,0)}[self.layer]
+        brush=bpy.data.brushes.get('HaloBridge Texture Draw') or bpy.data.brushes.new('HaloBridge Texture Draw',mode='TEXTURE_PAINT')
+        paint.brush=brush;brush.blend='MIX'
+        unified=context.tool_settings.unified_paint_settings
+        if self.node_name=='Paint Mask':
+            palette=((1,0,0),(0,1,0),(0,0,1),(1,1,1),(0,0,0))
+            color=palette[self.paint_channel] if self.paint_channel>=0 else {'GRASS':(0,0,0),'ROCK':(1,0,0),'DIRT':(0,1,0)}[self.layer]
+            brush.color=color
+            if unified.use_unified_color:unified.color=color
+        for area in context.screen.areas:
+            if area.type=='VIEW_3D':
+                area.spaces.active.shading.type='MATERIAL'
+                with context.temp_override(area=area):
+                    bpy.ops.wm.tool_set_by_id(name='builtin_brush.Draw')
+
 
 class HBCustomPack(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.custom_pack';bl_label='Pack texture edits into blend'
@@ -1050,7 +1080,7 @@ class HBCustomPack(Guard,bpy.types.Operator):
         editable_materials.pack(mat);_message='Texture edits packed. Save your blend file to keep them.'
 
 class HBReadShaderTextures(Guard,bpy.types.Operator):
-    bl_idname='halo_bridge.read_shader_textures';bl_label='Load Halo shader textures and masks'
+    bl_idname='halo_bridge.read_shader_textures';bl_label='Load Halo Shader Textures/Masks for Currently selected Material'
     bl_description='Read the active shader from the chosen .map, including its color-change mask. Use the map and import-game settings matching this asset'
     def run(self,context):
         obj=context.active_object;mat=obj.active_material if obj else None
@@ -1072,6 +1102,8 @@ class HBReadShaderTextures(Guard,bpy.types.Operator):
             data=read_json(out/'preview.json');replacement=blender_ops.material(data['materials'][0],out)
             if obj.data.users>1:obj.data=obj.data.copy()
             obj.data.materials[slot]=replacement
+            from . import regular_preview
+            regular_preview.paired_transparency(obj.data)
             _message='Loaded source shader textures. Create an editable terrain or color material to customize and export them.'
         start(context,lambda cancel:jobs.helper('extractor',dict(operation='material',game=cfg['game'],map=str(source),tag=tag,output=str(out)),Path(cfg['cache'])/'jobs',cancel),done,'Reading shader textures and masks...')
 
@@ -1196,7 +1228,7 @@ def preparation_warnings(context,cfg):
     vehicle_placements=vehicles.plan(context.scene,cfg)
     warnings=geometry_export.warnings(context.scene)
     if blockers:warnings.append(str(len(blockers))+' invisible block(s) will use their original Halo 3 scenery and collision tags. Their preview materials are not required or exported.')
-    if vehicle_placements:warnings.append(str(len(vehicle_placements))+' original Halo 3 vehicle(s) will be placed using their game tags. Their original appearance, physics and behavior replace the Blender preview; Blender material changes are not exported for these vehicles.')
+    if vehicle_placements:warnings.append(str(len(vehicle_placements))+' original Halo 3 vehicle(s) will be placed using their game tags. Vehicle physics and behavior come from the selected tag. Editable Colors materials are baked and applied to matching shader slots on a level-local vehicle copy.')
     selected=[o for o in geometry_export.objects(context.scene) if not geometry_export.is_sky(o)]
     issues,_,_=export_review.inspect(selected,cfg)
     if issues:
@@ -1325,7 +1357,8 @@ class HBPrepare(Guard,bpy.types.Operator):
         progress.stage(1,'Export current scene meshes')
         placements=geometry_export.export(cfg,out,progress=progress)
         report=bpy.data.texts.get('HaloBridge preparation report') or bpy.data.texts.new('HaloBridge preparation report')
-        report.clear();report.write('Current Blender meshes exported. Edits, transforms, modifiers and deletions are included. Collision is generated from current surfaces.\nStructure geometry: '+cfg.get('structure_source','current scene')+'\nSky: '+cfg.get('sky_scenario','default')+'\n\n'+'\n'.join(warnings))
+        report.clear();report.write('Current Blender meshes exported. Edits, transforms, modifiers and deletions are included.\nStructure geometry: '+cfg.get('structure_source','current scene')+'\nSky: '+cfg.get('sky_scenario','default')+'\n\n'+'\n'.join(warnings))
+        for name,route in cfg.get('collision_routes',{}).items():report.write(f'\n{name}: {route}')
         start(context,lambda cancel:build.prepare(cfg,out,placements,cancel,progress),done,'Compiling current scene geometry...')
 
         _task.is_prepare=True
@@ -1610,19 +1643,30 @@ class HBPanel(bpy.types.Panel):
                 l.operator('halo_bridge.vehicle_static')
         l=root
         l.separator();l=root.box();l.label(text='Materials and Shaders',icon='MATERIAL')
-        l.label(text='Shaders from the export destination.')
-        l.label(text='Imported materials already have shaders.')
+        active=context.active_object
+        active_material=active.active_material if active and active.type=='MESH' else None
+        if active_material:
+            l.label(text='Object: '+active.name,icon='OBJECT_DATA')
+            l.label(text='Active material: '+active_material.name,icon='MATERIAL')
+            if active_material.users>1:l.label(text='Shared material: affects other users.',icon='INFO')
+        else:l.label(text='Select an object with a material.',icon='INFO')
+        l.separator()
         l.operator('halo_bridge.scan_shaders',icon='FILE_REFRESH')
-        l.label(text='Shader level / category');l.prop(s,'shader_level',text='')
-        shader=s.shader_choice
-        label=shader.replace('\\','/').rsplit('/',1)[-1] if shader and shader!='NONE' else 'Choose an existing shader...'
-        l.operator('halo_bridge.choose_shader',text=label,icon='VIEWZOOM')
         l.prop(s,'shader_manual')
         if s.shader_manual:l.prop(s,'shader_path')
-        l.operator('halo_bridge.shader')
-        active=context.active_object
+        else:
+            l.label(text='Filter by level / category');l.prop(s,'shader_level',text='')
+            choices=shader_choices.items(s,context)
+            l.label(text=str(max(0,len(choices)-1))+' shaders in this category')
+            shader=s.shader_choice
+            label=shader.replace('\\','/').rsplit('/',1)[-1] if shader and shader!='NONE' else 'Choose an existing shader...'
+            row=l.row();row.enabled=len(choices)>1
+            row.operator('halo_bridge.choose_shader',text=label,icon='VIEWZOOM')
+        row=l.row();row.enabled=active_material is not None and _task is None
+        row.operator('halo_bridge.shader',icon='CHECKMARK')
+        l.label(text='Sets the shader used in Sapien.')
         if active and active.type=='MESH' and active.active_material and not vehicles.selected_vehicle(active):
-            l.separator();l.label(text='Collision for selected material')
+            l=root.box();l.label(text='Collision',icon='MOD_PHYSICS');l.prop(active,'hb_static_collision',text='Object collision')
             if len(active.material_slots)>1:
                 l.template_list('MATERIAL_UL_mats','hb_collision',active,'material_slots',active,'active_material_index',rows=3)
             l.label(text=active.active_material.name,icon='MATERIAL')
@@ -1633,24 +1677,34 @@ class HBPanel(bpy.types.Panel):
         row=edit.row();row.enabled=_task is None and material is not None and not target.get('hb_preview') if target else False
         row.operator('halo_bridge.read_shader_textures')
         row=edit.row();row.enabled=_task is None and material is not None and not target.get('hb_preview') if target else False
-        row.operator('halo_bridge.custom_material',text='Create paintable terrain').mode='terrain'
+        if not vehicles.selected_vehicle(target):
+            row.operator('halo_bridge.custom_material',text='Create paintable terrain').mode='terrain'
         row.operator('halo_bridge.custom_material',text='Create editable colors').mode='colors'
         if material and material.get('hb_custom_shader'):
-            edit.label(text='Bakes to custom Halo 3 textures on preparation.')
-            edit.prop(material,'["hb_bake_size"]',text='Texture resolution')
-            edit.label(text='Supported: 512, 1024, 2048 or 4096 pixels.')
-            for name in ('Grass','Rock','Dirt','Base Texture','Paint Mask','Grass Normal','Rock Normal','Dirt Normal','Normal Texture'):
+            edit.label(text='Paint exports on this vehicle placement.' if vehicles.selected_vehicle(target) else 'Bakes to custom Halo 3 textures on preparation.')
+            edit.prop(material,'hb_resolution',text='Texture resolution')
+            edit.prop(material,'hb_show_repeat',text='Repeat settings',icon='TRIA_DOWN' if material.hb_show_repeat else 'TRIA_RIGHT',emboss=False)
+            layers=json.loads(material.get('hb_layers','[]'))
+            names=[node.name for node in material.node_tree.nodes if node.type=='TEX_IMAGE'] if layers else ['Grass','Rock','Dirt','Base Texture','Paint Mask','Grass Normal','Rock Normal','Dirt Normal','Normal Texture']
+            for name in names:
                 node=material.node_tree.nodes.get(name)
                 if not node:continue
-                edit.label(text=name)
+                if layers and name=='Paint Mask':continue
+                label={'Grass':'Shader 1','Rock':'Shader 2','Dirt':'Shader 3'}.get(name,name)
+                edit.label(text=label+(' — '+node.label if node.label and node.label!=name else ''))
                 row=edit.row(align=True);row.template_ID(node,'image')
                 row.operator('halo_bridge.custom_load_image',text='',icon='FILE_FOLDER').node_name=name
-                row.operator('halo_bridge.custom_paint',text='',icon='BRUSH_DATA').node_name=name
+                if name!='Paint Mask':row.operator('halo_bridge.custom_paint',text='',icon='BRUSH_DATA').node_name=name
                 tiling=material.node_tree.nodes.get(name+' Tiling')
-                if name!='Paint Mask' and tiling:edit.prop(tiling.inputs[1],'default_value',text='Repeat')
+                if tiling and material.hb_show_repeat:
+                    row=edit.row(align=True)
+                    for axis in range(3):row.prop(tiling.inputs[1],'default_value',index=axis,text='XYZ'[axis])
             if material['hb_custom_shader']=='terrain':
-                row=edit.row(align=True)
-                for layer in ('GRASS','ROCK','DIRT'):row.operator('halo_bridge.custom_paint',text='Paint '+layer.title()).layer=layer
+                for i,name in enumerate(layers or ['Shader 1','Shader 2','Shader 3']):
+                    op=edit.operator('halo_bridge.custom_paint',text='Paint '+name)
+                    if layers:op.paint_channel=i
+                    else:op.layer=('GRASS','ROCK','DIRT')[i]
+                if layers:edit.operator('halo_bridge.custom_paint',text='Paint original blend').paint_channel=4
             else:
                 edit.label(text=material.get('hb_mask_source','Color mask'))
                 for index in range(1,5):edit.prop(material.node_tree.nodes['Color '+str(index)].inputs[2],'default_value',text='Color '+str(index))
@@ -1742,6 +1796,9 @@ def register():
     for cls in classes:bpy.utils.register_class(cls)
     bpy.types.VIEW3D_HT_header.append(draw_message_header)
     bpy.types.Scene.halo_bridge=PointerProperty(type=HBSettings)
+    bpy.types.Object.hb_static_collision=EnumProperty(name='Static collision',items=[('AUTO','Automatic','Prefer matching original collision from the source Editing Kit, then use a box or mesh fallback'),('SURFACE','Mesh surfaces','Build collision from eligible material surfaces'),('BOX','Simple box','Use one solid bounding box around eligible geometry, including gaps inside it')],default='AUTO')
+    bpy.types.Material.hb_show_repeat=BoolProperty(default=False)
+    bpy.types.Material.hb_resolution=EnumProperty(items=[(str(n),str(n),'',n) for n in (512,1024,2048,4096)],get=lambda m:int(m.get('hb_bake_size',1024)),set=lambda m,n:m.__setitem__('hb_bake_size',n))
     bpy.types.Material.hb_collision_mode=EnumProperty(name='Export collision',description='Controls collision generated from this material during static scene export',items=[('AUTO','Automatic','Halo foliage shaders and explicit render-only materials do not generate collision; other surfaces remain collidable'),('SOLID','Collidable','Generate collision from these surfaces, including foliage'),('RENDER_ONLY','Render only (no collision)','Keep these surfaces visible but omit them from collision; useful for leaf cards and decorative foliage')],default='AUTO')
     navigation.register()
     bpy.app.handlers.undo_pre.append(cancel_before_history)
@@ -1764,6 +1821,9 @@ def unregister():
     if load_catalogue in bpy.app.handlers.load_post:bpy.app.handlers.load_post.remove(load_catalogue)
     if paste_selection_updated in bpy.app.handlers.depsgraph_update_post:bpy.app.handlers.depsgraph_update_post.remove(paste_selection_updated)
     del bpy.types.Scene.halo_bridge
+    del bpy.types.Object.hb_static_collision
+    del bpy.types.Material.hb_show_repeat
+    del bpy.types.Material.hb_resolution
     del bpy.types.Material.hb_collision_mode
     for cls in reversed(classes):bpy.utils.unregister_class(cls)
 

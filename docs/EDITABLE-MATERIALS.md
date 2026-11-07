@@ -4,25 +4,24 @@ HaloBridge can author UV-painted terrain and masked colors for static Halo 3 lev
 
 ## Read the source material
 
-Select a placed mesh and its material slot. Choose the correct import game and a .map containing that shader, then click **Load Halo shader textures and masks**. Terrain blend maps and layers now contribute to the Blender color preview. Color-change masks become available to the color editor. This remains an approximation of Halo rendering, not a reproduction of every shader option, lighting or reflection.
+Select a placed mesh and its material slot. Choose the correct import game and a .map containing that shader, then click **Load Halo Shader Textures/Masks for Currently selected Material**. Terrain blend maps and layers now contribute to the Blender color preview. Color-change masks become available to the color editor. This remains an approximation of Halo rendering, not a reproduction of every shader option, lighting or reflection.
 
 ## Paint terrain
 
-1. Select the terrain and its material, then click **Create paintable terrain**.
-2. Choose Grass, Rock and Dirt images using each image selector or folder button. Existing Jungle layers are initial textures, not a guarantee that a layer contains the surface its generic label describes.
-3. Adjust Repeat to control texture tiling. Use matching normal layers when changing textures.
-4. Click **Paint Grass**, **Paint Rock**, or **Paint Dirt**, then paint on the mesh in Texture Paint mode. Black mask means grass, red means rock, and green means dirt. Intermediate values blend the layers.
-5. The small brush buttons also let you paint directly on a layer image.
-6. Click **Pack texture edits into blend**, then save the blend file.
-7. Return to Object Mode and prepare the scene. HaloBridge bakes color and normal textures and compiles custom shader tags.
+1. Select terrain and its original Halo material slot. Load its source textures with **Load Halo Shader Textures/Masks for Currently selected Material**. Confirm the blended preview before continuing.
+2. Click **Create paintable terrain**. Supported layered terrain retains its source blend and gains a paint overlay. An older editable material that was already reduced to one texture needs a fresh conversion from the original material to recover the source blend.
+3. Choose a texture resolution from **512, 1024, 2048 or 4096**. Expand **Repeat settings** to adjust tiling with compact X/Y/Z controls. UV sampling uses X/Y.
+4. Click a numbered shader-layer paint button and paint on the mesh in Texture Paint mode. Layer numbers refer to the source shader's textures, so inspect the images when choosing grass, rock or another surface. **Paint original blend** restores the underlying source mixture. Older three-layer editable materials retain their existing mask interpretation.
+5. Use the small texture brush buttons to paint a selected image directly. A red mask in the Image Editor represents a layer weight. View the mesh in Material Preview to see the mixed surface.
+6. Click **Pack texture edits into blend**, then save. Return to Object Mode and prepare the scene to bake the color and normal textures into level-local tags.
 
-Use UVs within one 0-1 tile. Overlapping UVs share the same painted area. To paint unique areas of a large landscape, unwrap appropriately or divide it into independently textured surfaces. Baking to 1024 pixels can lose tiled detail over a large surface; 512, 1024, 2048 and 4096 are supported. This version does not export a new native multi-layer terrain shader with unlimited tiled detail.
+Terrain painting needs unique UVs in a single tile. Conversion can normalize the active material's used UV range while compensating its original texture sampling. Overlapping UVs still paint the same area. Large terrain can lose fine detail when baked to one image. Custom export produces baked textures, with the selected resolution determining the available detail.
 
 ## Recolor armor or vehicles
 
 Load the source shader textures first, then click **Create editable colors** on the desired material slot. Colors 1-4 correspond to R, G, B and alpha in the mask. A source Halo change-color mask is used when available. Without one, Color 1 initially affects the whole selected material; load or paint a mask to limit it. The mask source is displayed in the panel.
 
-Color choices are baked for static geometry; this does not change an AI character's rank/team colors or the appearance of an original vehicle-tag placement. Use the static route for these custom materials. Other material slots retain their own settings.
+For an original Halo 3 vehicle, choose its exterior material slot, click **Create editable colors**, and adjust the tint. Preparation bakes the painted slots and creates a vehicle, model and render model under the output level. These tags reference the original gameplay and physics resources. Other shader slots keep their original references. Turrets or other attachments with their own render models are separate. Custom colors represent fixed paint rather than AI rank or team-color logic.
 
 ## Limits and preservation
 

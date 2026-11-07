@@ -12,7 +12,7 @@ using Bungie.Tags;
 
 class Job { public int version,section; public string operation,kit,scenario,output,template,asset_name; public string[] sources; public float[] position; public ShaderImport[] shaders; public Placement[] placements; public Dictionary<string,string> previous; }
 class ShaderImport { public string path,base_map,normal_map,alpha_map; }
-class Placement { public string id,tag; public float[] position,rotation; public float scale=1; }
+class Placement { public Dictionary<string,string> paint; public string id,tag; public float[] position,rotation; public float scale=1; }
 class Program {
  [DllImport("kernel32.dll",CharSet=CharSet.Unicode)] static extern bool SetDllDirectory(string p);
  static string kit; static JavaScriptSerializer js=new JavaScriptSerializer {MaxJsonLength=int.MaxValue};
@@ -31,11 +31,15 @@ class TagOps {
  static string Safe(string p){if(String.IsNullOrWhiteSpace(p)||Path.IsPathRooted(p)||p.Split('\\','/').Any(x=>x==".."))throw new Exception("Invalid relative tag path");return p.Replace('/','\\');}
  [MethodImpl(MethodImplOptions.NoInlining)] public static void Run(Job j) {
   kit=Path.GetFullPath(j.kit);
-  ManagedBlamSystem.InitializeProject(InitializationType.TagsOnly,kit);
+  var init=typeof(ManagedBlamSystem).GetMethod("InitializeProject",new[]{typeof(InitializationType),typeof(string)});
+  if(init!=null)init.Invoke(null,new object[]{InitializationType.TagsOnly,kit});
+  else if(j.operation=="model_collision"){var start=typeof(ManagedBlamSystem).GetMethods().Single(m=>m.Name=="Start" && m.GetParameters().Length==3);var t=start.GetParameters()[2].ParameterType;var options=Activator.CreateInstance(t);t.GetProperty("InitializationLevel").SetValue(options,InitializationType.TagsOnly,null);t.GetProperty("ForBackgroundServiceProcess").SetValue(options,true,null);start.Invoke(null,new object[]{kit,null,options});}
+  else throw new Exception("Select the Halo 3 Editing Kit for this operation.");
   if(j.operation=="prepare_bitmaps") { PrepareBitmaps(j);return; }
   if(j.operation=="import_shaders") { ImportShaders(j);return; }
   if(j.operation=="list_skies") { ListSkies(j);return; }
   if(j.operation=="recover_source") { RecoverSource(j);return; }
+  if(j.operation=="model_collision"){ModelCollision(j);return;}
   if(j.operation=="collision") { Collision(j);return; }
   if(j.operation=="inspect_bsp") { InspectBsp(j);return; }
   if(j.operation=="resolve_scenery") { ResolveScenery(j);return; }
@@ -124,6 +128,37 @@ class TagOps {
   var reference=F<TagFieldReference>(palette.Elements[pi].Fields,"name").Path;
   return reference==null?"":reference.RelativePath;
  }
+ static string PaintedVehicle(Job job, Placement p) {
+  string basePath=Path.GetDirectoryName(Safe(job.scenario))+"\\vehicles\\"+p.id;
+  string shaderRoot=Path.GetDirectoryName(Safe(job.scenario))+"\\shaders\\";
+  var missing=new HashSet<string>(p.paint.Keys,StringComparer.OrdinalIgnoreCase);
+  Directory.CreateDirectory(Path.Combine(kit,"tags",Path.GetDirectoryName(basePath)));
+  using(var vehicle=new TagFile(TagPath.FromPathAndType(Safe(p.tag),"vehi*"))) {
+   var modelRef=References(vehicle.Fields).Single(r=>r.FieldName=="model" && r.Path!=null);
+   using(var model=new TagFile(modelRef.Path)) {
+    var renderRef=References(model.Fields).Single(r=>r.FieldName=="render model" && r.Path!=null);
+    using(var render=new TagFile(renderRef.Path)) {
+     var materials=F<TagFieldBlock>(render.Fields,"materials");
+     foreach(var item in materials.Elements) {
+      foreach(var reference in References(item.Fields)) {
+       string alias;
+       if(reference.Path==null || !reference.Path.Extension.StartsWith("shader") || !p.paint.TryGetValue(reference.Path.RelativePath,out alias))continue;
+       if(!System.Text.RegularExpressions.Regex.IsMatch(alias,"^custom_[0-9a-f]{20}$") || !File.Exists(Path.Combine(kit,"tags",shaderRoot+alias+".shader")))throw new Exception("Missing generated vehicle paint shader: "+alias);
+       missing.Remove(reference.Path.RelativePath);
+       reference.Path=TagPath.FromPathAndType(shaderRoot+alias,"rmsh");
+      }
+     }
+     if(missing.Count>0)throw new Exception("Vehicle render model has no matching shader for: "+String.Join(", ",missing));
+     var newRender=TagPath.FromPathAndType(basePath,"mode");
+     render.SaveAs(newRender);renderRef.Path=newRender;
+    }
+    var newModel=TagPath.FromPathAndType(basePath,"hlmt*");
+    model.SaveAs(newModel);modelRef.Path=newModel;
+   }
+   vehicle.SaveAs(TagPath.FromPathAndType(basePath,"vehi*"));
+  }
+  return basePath;
+ }
  static void SyncVehicles(TagFile tag,Job j) {
   var block=F<TagFieldBlock>(tag.Fields,"vehicles");var palette=F<TagFieldBlock>(tag.Fields,"vehicle palette");var names=F<TagFieldBlock>(tag.Fields,"object names");var owned=VehicleOwned(block,names);
   var prev=(j.previous??new Dictionary<string,string>()).Where(p=>p.Key.StartsWith("vehicle:")).ToDictionary(p=>p.Key.Substring(8),p=>p.Value);
@@ -135,6 +170,7 @@ class TagOps {
   foreach(var pair in owned.Where(p=>!wanted.Contains(p.Key)).OrderByDescending(p=>p.Value)){int ni=F<TagFieldBlockIndex>(block.Elements[pair.Value].Fields,"name").Value;block.RemoveElement(pair.Value);F<TagFieldBlockIndex>(names.Elements[ni].Fields,"scenario_datum_index").Value=-1;}
   owned=VehicleOwned(block,names);
   foreach(var p in placements){
+   if(p.paint!=null && p.paint.Count>0)p.tag=PaintedVehicle(j,p);
    int pi=-1;for(int i=0;i<palette.Elements.Count;i++){var r=F<TagFieldReference>(palette.Elements[i].Fields,"name").Path;if(r!=null&&r.RelativePath.Equals(p.tag,StringComparison.OrdinalIgnoreCase))pi=i;}
    if(pi<0){pi=palette.Elements.Count;F<TagFieldReference>(palette.AddElement().Fields,"name").Path=TagPath.FromPathAndType(Safe(p.tag),"vehi*");}
    int index;TagField[] fields;
@@ -403,6 +439,40 @@ class TagOps {
    File.WriteAllText(j.output,js.Serialize(new{version=1,instances=items,definitions=defs}));
   }
  }
+ static object CollisionFaces(TagField[] c) {
+  var vertices=F<TagFieldBlock>(c,"vertices");var edges=F<TagFieldBlock>(c,"edges");var surfaces=F<TagFieldBlock>(c,"surfaces");
+     var points=vertices.Elements.Cast<TagElement>().Select(e=>F<TagFieldElementArraySingle>(e.Fields,"point").Data).ToArray();var faces=new List<int[]>();
+     for(int si=0;si<surfaces.Elements.Count;si++) {
+      var face=new List<int>();int first=(int)I(surfaces.Elements[si].Fields,"first edge"),edge=first;
+      do {if(edge<0||edge>=edges.Elements.Count||face.Count>edges.Elements.Count)throw new Exception("Invalid collision edge loop");var f=edges.Elements[edge].Fields;bool left=I(f,"left surface")==si;face.Add((int)I(f,left?"start vertex":"end vertex"));edge=(int)I(f,left?"forward edge":"reverse edge");}while(edge!=first);
+      if(face.Count>=3)faces.Add(face.ToArray());
+     }
+  return new{positions=points,faces=faces};
+ }
+ static void ModelCollision(Job j) {
+  string source=Safe(j.scenario);
+  using(var model=new TagFile(TagPath.FromPathAndType(source,"hlmt*"))) {
+   var refs=References(model.Fields).ToArray();
+   var render=refs.Single(x=>x.FieldName=="render model").Path;
+   var coll=refs.Single(x=>x.FieldName=="collision model").Path;
+   if(render==null || !render.RelativePath.Equals(source,StringComparison.OrdinalIgnoreCase) || coll==null)throw new Exception("No matching collision reference for "+source);
+   using(var geom=new TagFile(render))
+   using(var tag=new TagFile(coll)){
+    var nodes=F<TagFieldBlock>(geom.Fields,"nodes").Elements.Cast<TagElement>().ToDictionary(n=>F<TagFieldElementStringID>(n.Fields,"name").Data);
+    var skeleton=F<TagFieldBlock>(geom.Fields,"nodes").Elements.Cast<TagElement>().Select(n=>new{name=F<TagFieldElementStringID>(n.Fields,"name").Data,parent=F<TagFieldBlockIndex>(n.Fields,"parent node").Value,translation=F<TagFieldElementArraySingle>(n.Fields,"default translation").Data,rotation=F<TagFieldElementArraySingle>(n.Fields,"default rotation").Data}).ToArray();
+    var cnodes=F<TagFieldBlock>(tag.Fields,"nodes");
+    var meshes=new List<object>();
+    foreach(var region in F<TagFieldBlock>(tag.Fields,"regions").Elements)
+    foreach(var perm in F<TagFieldBlock>(region.Fields,"permutations").Elements)
+    foreach(var part in F<TagFieldBlock>(perm.Fields,"bsps").Elements){
+     int index=(int)I(part.Fields,"node index");
+     var n=nodes[F<TagFieldElementStringID>(cnodes.Elements[index].Fields,"name").Data].Fields;
+     meshes.Add(new{region=F<TagFieldElementStringID>(region.Fields,"name").Data,permutation=F<TagFieldElementStringID>(perm.Fields,"name").Data,node=F<TagFieldElementStringID>(n,"name").Data,geometry=CollisionFaces(S(part.Fields,"bsp"))});
+    }
+    File.WriteAllText(j.output,js.Serialize(new{source=source,collision=coll.RelativePath,skeleton=skeleton,meshes=meshes}));
+   }
+  }
+ }
  static void Collision(Job j) {
   using(var tag=new TagFile(TagPath.FromPathAndType(Safe(j.scenario),"sbsp*"))) {
    var ri=S(tag.Fields,"resource interface");var resources=F<TagFieldBlock>(ri,"raw_resources");
@@ -417,14 +487,7 @@ class TagOps {
     var defs=F<TagFieldBlock>(S(raw.Fields,"raw_items"),"instanced geometries definitions");
     for(int definitionIndex=0;definitionIndex<defs.Elements.Count;definitionIndex++) {var def=defs.Elements[definitionIndex];if(I(def.Fields,"mesh index")!=j.section)continue;
      if(expectedDefinition>=0 && definitionIndex!=expectedDefinition)throw new Exception("Source map/tag geometry indices differ; collision was not guessed.");
-     var c=S(def.Fields,"collision info");var vertices=F<TagFieldBlock>(c,"vertices");var edges=F<TagFieldBlock>(c,"edges");var surfaces=F<TagFieldBlock>(c,"surfaces");
-     var points=vertices.Elements.Cast<TagElement>().Select(e=>F<TagFieldElementArraySingle>(e.Fields,"point").Data).ToArray();var faces=new List<int[]>();
-     for(int si=0;si<surfaces.Elements.Count;si++) {
-      var face=new List<int>();int first=(int)I(surfaces.Elements[si].Fields,"first edge"),edge=first;
-      do {if(edge<0||edge>=edges.Elements.Count||face.Count>edges.Elements.Count)throw new Exception("Invalid collision edge loop");var f=edges.Elements[edge].Fields;bool left=I(f,"left surface")==si;face.Add((int)I(f,left?"start vertex":"end vertex"));edge=(int)I(f,left?"forward edge":"reverse edge");}while(edge!=first);
-      if(face.Count>=3)faces.Add(face.ToArray());
-     }
-     meshes.Add(new{positions=points,faces=faces});
+     var c=S(def.Fields,"collision info");     meshes.Add(CollisionFaces(c));
     }
    }
    if(meshes.Count!=1)throw new Exception("Could not uniquely match original collision definition; export is blocked until collision is supplied.");

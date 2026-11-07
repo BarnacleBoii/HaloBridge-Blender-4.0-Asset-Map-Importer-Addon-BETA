@@ -10,7 +10,6 @@ from .catalog import read_json
 def selected_vehicle(obj):return bool(obj and obj.type=='MESH' and obj.get('hb_vehicle_tag'))
 
 def validate_preview(obj):
-    if obj.get('hb_game','halo3')!='halo3':raise ValueError('Original vehicle placement currently supports Halo 3 assets only.')
     if not obj.get('hb_source_tag') or not obj.get('hb_mesh_signature'):
         raise ValueError('This object has no verified original model identity. Place its model from the Halo 3 Asset List first.')
     if obj.modifiers:raise ValueError('Remove modifiers before using an original vehicle tag; mesh edits cannot be applied to the original vehicle.')
@@ -34,6 +33,7 @@ def plan(scene,config):
     for obj in scene.objects:
         if not selected_vehicle(obj) or obj.get('hb_preview') or (obj.get('hb_ignore') and not obj.get('hb_map_reference')):continue
         try:
+            if obj.get('hb_game','halo3')!='halo3':raise ValueError('Original vehicle placement requires Halo 3 assets.')
             origin_offset=validate_preview(obj)
             tag=obj['hb_vehicle_tag'];root=Path(config['kit'])/'tags';path=root/(tag+'.vehicle')
             if not path.resolve().is_relative_to(root.resolve()) or not path.is_file():raise ValueError('Original vehicle tag is missing: '+tag)

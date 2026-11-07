@@ -78,6 +78,8 @@ def material(meta, directory):
             mask.colorspace_settings.name='Non-Color';m['hb_change_mask_image']=mask.name
     from . import layered_preview
     layered_preview.apply(m,meta,directory)
+    from . import regular_preview
+    regular_preview.apply(m,meta,directory)
     if meta['alpha']!='opaque':
         m.blend_method='CLIP' if meta['alpha']=='clip' else 'BLEND';m.use_backface_culling=False
     return m
@@ -97,6 +99,8 @@ def mesh_from_preview(preview, asset_id, data=None):
     uv=mesh.uv_layers.new(name='UVMap')
     for loop in mesh.loops:uv.data[loop.index].uv=uvs[loop.vertex_index]
     mesh.use_auto_smooth=True;mesh.normals_split_custom_set_from_vertices(normals)
+    from . import regular_preview
+    regular_preview.paired_transparency(mesh)
     mesh['hb_asset_id']=asset_id;return mesh
 
 def place(asset, path, config, location=None):

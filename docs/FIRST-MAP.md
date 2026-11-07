@@ -1,4 +1,4 @@
-# Your first custom test map — HaloBridge v0.9
+# Your first custom test map — HaloBridge v0.9.1
 
 [Home](../README.md) · [Installation](INSTALLATION.md) · [Feature reference](FEATURES.md)
 
@@ -73,3 +73,10 @@ Save and restart Blender after updating before using this feature. Vehicle tag c
 Background: [c20 Halo 3 scenario reference](https://c20.reclaimers.net/h3/tags/scenario/) and [Microsoft Halo 3 instance geometry](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/art/instanceobjects/instanceobjectshome). Original vehicle tags and static instance geometry are different export routes.
 
 For a painted floor, follow [Paint terrain](EDITABLE-MATERIALS.md#paint-terrain) before preparing. Pack the images and save your blend.
+
+## Review materials and collision before testing
+
+Select each important object and check its active material in Materials and Shaders. Assign shader to active material sets its Sapien shader reference. Load the source shader textures when you want the Blender preview refreshed. Use the [editable-material guide](EDITABLE-MATERIALS.md) to export painted terrain or colors.
+
+Leave Object collision on Automatic to try matched original collision. Read the per-object collision routes in the preparation report after exporting. Inspect floors, foliage and barriers in Sapien, especially objects using a fallback. An oversized model may be internally divided into aligned instances. A successful Sapien compile still needs a playtest, followed by separate runtime and multiplayer testing for distribution.
+

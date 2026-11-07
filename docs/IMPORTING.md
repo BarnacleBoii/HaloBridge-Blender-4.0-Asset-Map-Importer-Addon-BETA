@@ -1,4 +1,4 @@
-# Use HaloBridge v0.9 for Blender-only importing
+# Use HaloBridge v0.9.1 for Blender-only importing
 
 [Home](../README.md) · [Installation](INSTALLATION.md) · [First map](FIRST-MAP.md) · [Features](FEATURES.md) · [Troubleshooting](TROUBLESHOOTING.md)
 
@@ -39,3 +39,10 @@ No. Materials/shader-tag, sky and Sapien preparation settings are for game expor
 For game testing later, install/configure H3EK and follow [First Map](FIRST-MAP.md). Reach importing remains experimental; see [Reach](REACH.md) for conversion limits.
 
 After placement, select a supported model to choose visible regions or separate all variants. See [Model parts and variants](FEATURES.md#model-parts-and-variants).
+
+## Refreshing older material previews
+
+Version 0.9.1 adds supported Halo 3 detail blending and detection of paired transparent faces. Existing saved materials may still use the earlier preview. Select a stock material, choose its source game/map, then use Load Halo Shader Textures/Masks for Currently selected Material. Repeat for affected materials. The Snowbound icy-metal correction depends on newly extracted shader parameters.
+
+Material Preview lighting differs from Halo's lighting. Full-map imports remain static visual layouts. The [material guide](EDITABLE-MATERIALS.md) explains how to create editable versions for custom export.
+

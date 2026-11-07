@@ -1,4 +1,4 @@
-# HaloBridge v0.9 — troubleshooting
+# HaloBridge v0.9.1 — troubleshooting
 
 [Home](../README.md) · [Installation](INSTALLATION.md) · [Known limits](LIMITATIONS.md)
 
@@ -72,9 +72,9 @@ Use **Cancel preparation** to stop a background build and restore the previous s
 
 ## Red trees or red overlapping-surfaces labels in Sapien
 
-These labels are compiler debug geometry, not a new visible collision asset. Check the preparation report for geometry warnings even when compilation succeeded. Static mesh preparation generates collision from the current surfaces; it does not restore the original tree collision tag.
+These labels are compiler debug geometry, not a new visible collision asset. Check the preparation report for geometry warnings even when compilation succeeded. Automatic collision now tries verified source collision geometry. Check the object route in the preparation report to see whether the build used original collision, a box or mesh surfaces.
 
-Automatic collision handling excludes materials using Halo's foliage shader class and the verified Citadel `cit_tree_leafc` leaf material, while retaining bark and ground collision. Other generic leaf shaders cannot be identified reliably by transparency or name alone. Select the tree in Blender, select its leaf material under **Materials and Shaders > Collision for selected material**, then choose **Render only (no collision)** and prepare again. Do not apply this to the trunk or ground if you need them collidable. Material settings are shared by all objects using that material.
+Automatic collision handling excludes materials using Halo's foliage shader class and the verified Citadel `cit_tree_leafc` leaf material, while retaining bark and ground collision. Other generic leaf shaders cannot be identified reliably by transparency or name alone. Select the tree in Blender, select its leaf material under **Collision**, then choose **Render only (no collision)** and prepare again. Do not apply this to the trunk or ground if you need them collidable. Material settings are shared by all objects using that material.
 
 Use **Collidable** to override automatic treatment deliberately. Original source tags and Blender geometry are not modified by these export flags. Existing overlapping or duplicate solid surfaces may still need correction. After rebuilding, reload the resulting scenario and current warning geometry; old debug overlays can be stale. Hiding a warning overlay alone does not correct collision.
 
@@ -109,3 +109,22 @@ This is intentional: replacement assets use their original import scale, preserv
 ## Collision edge on a Phantom or other instance
 
 When Tool confirms the structure imported successfully, HaloBridge lists an isolated degenerate instance collision edge as a warning. Walk against that asset in Sapien to check the result. Other compiler errors can still stop the build.
+
+## Flickering glass or large map viewport
+
+Version 0.9.1 detects transparent triangles with matching opposite-facing mates and uses backface culling on local material copies. Saved meshes need a fresh material load to run that check. Genuine duplicate geometry and other transparency cases can still require inspection.
+
+An extreme viewport Clip Start/End ratio can worsen depth precision. Adjust the range for the area being edited. In the tested Snowbound copy, Clip Start 1 and End 100000 replaced 0.01 and 9999999. These are scene-specific examples. Save a copy before changing your view setup.
+
+## Gray Snowbound metal or missing purple detail
+
+The old preview displayed the base mask while skipping detail blending and a second detail texture. Restart Blender with v0.9.1, select the affected original material and click Load Halo Shader Textures/Masks for Currently selected Material. The source map must contain its shader. Supported Halo 3 detail operations now include the Snowbound two-detail-overlay shader. Lighting and reflections can still differ from Halo.
+
+## Shader category still shows the wrong entries
+
+Restart Blender after updating, click Scan existing shaders, then choose Filter by level / category. Check the displayed count before opening Choose an existing shader. The popup captures this category until it closes. Choose All levels / shared shaders to search everything. If the category changes while a popup is open, reopen it. Assignment targets the active material shown in the panel and affects its shared users.
+
+## Large Elite or instance render-index overflow
+
+Version 0.9.1 can export an oversized static instance as multiple aligned Halo instances. The Blender object stays one editable model and retains its visible triangles. This was tested with the painted Reach Elite that previously exceeded the render-index limit. Cluster and main-structure errors still need their own geometry fixes.
+

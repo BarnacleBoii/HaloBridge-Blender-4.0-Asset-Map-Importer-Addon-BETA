@@ -16,6 +16,8 @@ namespace Reclaimer.Blam.Common.Gen3
         public static void PopulateTextureMappings<TBitmap>(Dictionary<int, TBitmap> bitmapCache, Material material, string tagClassCode, Dictionary<string, string> shaderOptions, BlockCollection<StringId> usages, BlockCollection<StringId> arguments, BlockCollection<RealVector4> tilingData, Func<int, IIndexItem> tagFunc)
             where TBitmap : IContentProvider<IBitmap>, IBitmap
         {
+            foreach (var option in shaderOptions)
+                material.CustomProperties.Add("hb_option_" + option.Key, option.Value);
             var textureParams = from index in Enumerable.Range(0, usages.Count)
                                 let usage = usages[index]
                                 let tileIndex = arguments.IndexOf(usage)
@@ -78,6 +80,7 @@ namespace Reclaimer.Blam.Common.Gen3
 
                 material.TextureMappings.Add(new TextureMapping
                 {
+                    Parameter = texParam.Usage,
                     Usage = ShaderParameters.UsageLookup.GetValueOrDefault(texParam.Usage, TextureUsage.Other),
                     Tiling = new Vector2(texParam.TileData.X, texParam.TileData.Y),
                     BlendChannel = texParam.BlendChannel,

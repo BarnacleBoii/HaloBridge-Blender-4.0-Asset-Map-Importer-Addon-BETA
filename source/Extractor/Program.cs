@@ -104,11 +104,17 @@ class Program {
      var textures=new List<object>();
      foreach(var tm in m.TextureMappings.Where(t=>t.Texture!=null && new[]{"diffuse","normal","transparency","blend","color_change","diffuse_detail"}.Contains(t.Usage))) {
       var tex=tm.Texture;var texName="texture_"+tex.Id+".png";var full=Path.Combine(output,texName);
-      try {if(!File.Exists(full)||new FileInfo(full).Length==0) {var temp=full+".writing.png";try {tex.GetDds().WriteToDisk(temp,System.Drawing.Imaging.ImageFormat.Png);File.Move(temp,full,true);}finally {if(File.Exists(temp))File.Delete(temp);}}textures.Add(new{name=tex.Name,usage=tm.Usage,path=texName,tiling=new[]{tm.Tiling.X,tm.Tiling.Y},gamma=tex.Gamma,channels=(int)tm.ChannelMask,blend_channel=(int)tm.BlendChannel});}
+      try {if(!File.Exists(full)||new FileInfo(full).Length==0) {var temp=full+".writing.png";try {tex.GetDds().WriteToDisk(temp,System.Drawing.Imaging.ImageFormat.Png);File.Move(temp,full,true);}finally {if(File.Exists(temp))File.Delete(temp);}}textures.Add(new{name=tex.Name,parameter=tm.Parameter,usage=tm.Usage,path=texName,tiling=new[]{tm.Tiling.X,tm.Tiling.Y},gamma=tex.Gamma,channels=(int)tm.ChannelMask,blend_channel=(int)tm.BlendChannel});}
+      catch(Exception e) when(tm.Usage=="normal" && String.Equals(tex.Name,@"shaders\default_bitmaps\bitmaps\default_vector",StringComparison.OrdinalIgnoreCase) && e is IndexOutOfRangeException) {
+       // A neutral tangent normal is represented by the unconnected Blender normal socket.
+       Console.Error.WriteLine("Using a flat normal for the unavailable default_vector placeholder.");
+      }
       catch(Exception e){Console.Error.WriteLine("Texture "+tex.Name+": "+e.Message);if(warnings==null || (strictTextures && tm.Usage!="normal"))throw;warnings.Add("Missing texture "+tex.Name+": "+e.Message);}
      }
      m.CustomProperties.TryGetValue("tag_name",out var shader);
-     mats.Add(new{id=m.Id,name=m.Name,shader=shader?.ToString()??"",alpha=m.AlphaMode,tints=m.Tints.Select(t=>new{usage=t.Usage,blend_channel=(int)t.BlendChannel,color=new[]{t.Color.R/255f,t.Color.G/255f,t.Color.B/255f,t.Color.A/255f}}).ToArray(),textures});
+     m.CustomProperties.TryGetValue("hb_source_game",out var sourceGame);
+     var options=m.CustomProperties.Where(p=>p.Key.StartsWith("hb_option_")).ToDictionary(p=>p.Key.Substring(10),p=>p.Value?.ToString());
+     mats.Add(new{id=m.Id,name=m.Name,shader=shader?.ToString()??"",alpha=m.AlphaMode,source_game=sourceGame?.ToString(),options,tints=m.Tints.Select(t=>new{usage=t.Usage,blend_channel=(int)t.BlendChannel,color=new[]{t.Color.R/255f,t.Color.G/255f,t.Color.B/255f,t.Color.A/255f}}).ToArray(),textures});
     }
     return mats;
  }

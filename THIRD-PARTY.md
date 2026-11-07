@@ -11,3 +11,5 @@ System.Drawing.Common 10.0.9 is a build dependency supplied through NuGet. Its r
 The Halo Asset Blender Development Toolset is an external dependency by General-101 and contributors: https://github.com/General-101/Halo-Asset-Blender-Development-Toolset . It is not redistributed. The tested adapter supports v364 and v432.
 
 Halo assets, the Halo 3 Editing Kit, ManagedBlam, and MCC map files are external user-supplied dependencies. None are included in the public add-on or source archives. The code license does not apply to game content.
+
+The v0.9.1 Reclaimer integration also retains named shader parameters/options and recognizes additional detail-map slots for preview construction. HaloBridge's regular preview implements supported albedo blending using Blender nodes. Halo 3 shader parameter behavior is documented in Microsoft's [Albedo Properties](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/shaders/albedo).

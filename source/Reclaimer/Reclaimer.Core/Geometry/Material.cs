@@ -23,6 +23,7 @@ namespace Reclaimer.Geometry
     [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
     public class TextureMapping
     {
+        public string Parameter { get; set; }
         public string Usage { get; set; }
         public ChannelMask BlendChannel { get; set; }
         public Texture Texture { get; set; }

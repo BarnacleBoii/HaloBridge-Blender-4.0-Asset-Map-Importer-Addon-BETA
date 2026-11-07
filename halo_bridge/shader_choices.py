@@ -17,12 +17,15 @@ def group(path):
 def level_items(settings,context):
     return _cache.get(games.destination(settings).kit,{}).get('levels',_empty_levels)
 def items(settings,context):
-    data=_cache.get(games.destination(settings).kit)
+    return filtered_items(games.destination(settings).kit,getattr(settings,'shader_level','ALL'))
+
+def filtered_items(kit,category):
+    data=_cache.get(kit)
     if not data:return _empty
-    return data['groups'].get(getattr(settings,'shader_level','ALL'),data['groups']['ALL'])
+    return data['groups'].get(category,_empty)
 
 def search_items(operator,context):
-    return items(context.scene.halo_bridge,context) if context else _empty
+    return filtered_items(operator.shader_kit,operator.shader_category)
 
 def level_changed(settings,context):
     settings.shader_choice='NONE'

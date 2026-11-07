@@ -59,6 +59,7 @@ namespace Reclaimer.Blam.Halo3
                 };
 
                 material.CustomProperties.Add(BlamConstants.SourceTagPropertyName, tag.TagName);
+                material.CustomProperties.Add("hb_source_game", "halo3");
 
                 var shader = tag?.ReadMetadata<ShaderTag>();
                 if (shader == null)
