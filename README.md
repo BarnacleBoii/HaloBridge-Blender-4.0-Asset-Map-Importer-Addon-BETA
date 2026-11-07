@@ -8,7 +8,7 @@ HaloBridge is a Blender 4.0 Add-on created to streamline the Halo map modding/as
 
 **v0.9.1 · Beta preview · Windows x64 · Blender 4.0**
 
-**Viewport scale:** HaloBridge uses a 100× working scale and converts it during export. For large scenes, adjust Clip Start and End to the area you are editing. An extreme near/far range can worsen depth flickering. See [viewport troubleshooting](docs/TROUBLESHOOTING.md#flickering-glass-or-large-map-viewport).
+**Viewport scale:** Halo:MCC Assets uses a 100× scale compared to blenders scale. For large scenes, adjust Clip Start and End to the area you are editing. An extreme near/far range can worsen depth flickering. See [viewport troubleshooting](docs/TROUBLESHOOTING.md#flickering-glass-or-large-map-viewport).
 
 **[Releases and Downloads](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases)** · **[Installation](docs/INSTALLATION.md)** · **[First map tutorial](docs/FIRST-MAP.md)** · **[Feature guide](docs/FEATURES.md)** · **[Troubleshooting](docs/TROUBLESHOOTING.md)**
 
