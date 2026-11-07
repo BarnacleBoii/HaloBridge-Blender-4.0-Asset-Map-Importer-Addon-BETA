@@ -2,7 +2,7 @@
 
 # HaloBridge — Blender 4.0 Asset / Map Importer + Sapien Level Preparation(Beta)
 
-HaloBridge is a Blender 4.0 Add-on created to streamline the Halo map modding/asset-management workflow, quickly import Halo:MCC fully textured static game assets and entire .maps full textured into Blender, and an experimental option to prepare the current blender scene for a Halo 3 Sapien test level. Currently Supports Halo 3, Halo Reach(Experimental). more planned.
+HaloBridge is a Blender 4.0 Add-on created to streamline the Halo map modding/asset-management workflow, quickly import Halo:MCC fully textured static game assets and entire .maps fully textured into Blender, and an experimental option to prepare the current blender scene for a Halo 3 Sapien test level. Currently Supports Halo 3, Halo Reach(Experimental). more planned.
 (Coded with Chat GPT 6 Astra, guided by user input)
 **v0.9 · Beta preview · Windows x64 · Blender 4.0**
 
