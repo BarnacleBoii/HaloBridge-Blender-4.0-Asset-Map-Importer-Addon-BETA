@@ -1,130 +1,166 @@
-# HaloBridge v0.9.1 — troubleshooting
+# Troubleshooting
 
-[Home](../README.md) · [Installation](INSTALLATION.md) · [Known limits](LIMITATIONS.md)
+[Home](../README.md) · [Installation](INSTALLATION.md) · [Sidebar reference](FEATURES.md) · [Known limits](LIMITATIONS.md)
 
-## Moving one copy moves the others
+**First step for any problem:** look at **HaloBridge Warnings and Messages** near the bottom of the sidebar and click **Open diagnostic report**. It names the objects, files and reasons involved. For setup problems, run **Check setup**.
 
-Check **Object Mode**, select only one object, and turn **Proportional Editing** off. The circle icon in the viewport header should not be blue; **O** toggles it when the pointer is over the viewport. Proportional Editing also moves nearby unselected objects. Overlapping copies can move by the same amount.
+## Contents
 
-Linked meshes behave differently in Edit Mode: editing shared vertices changes all users of that mesh. Use an ordinary duplicate or make the mesh single-user when you want independent mesh edits. Object Mode movement does not normally change other objects that merely share a mesh.
+- **Setup:** [HaloBridge tab missing](#the-halobridge-tab-doesnt-appear) · [Detect folders found nothing](#detect-folders-didnt-find-my-folders) · [Check setup complaints](#check-setup-reports-problems) · [Helper or runtime errors](#a-helper-wont-start)
+- **Importing:** [Empty asset list](#the-asset-list-is-empty) · [Map picker empty](#the-map-picker-is-empty-or-a-map-isnt-found) · [Slow imports](#importing-or-previewing-is-slow) · [Missing textures](#textures-are-missing-white-or-flat) · [Missing BSPs](#missing-bsps-or-objects-after-a-whole-level-import) · [.scenario import problems](#scenario-import-problems)
+- **Editing:** [Copies move together](#moving-one-object-moves-others) · [Swap changes size](#swapped-assets-have-a-different-size) · [Flickering / grey view](#flickering-surfaces-or-a-grey-cut-off-view)
+- **Preparing:** [Level name rejected](#output-level-name-is-rejected) · [Prepare fails](#prepare-fails) · [Seems stuck](#preparation-seems-stuck) · [Geometry limits](#cluster--too-many-vertices-triangles-or-strip-segments) · [Collision errors](#collision-errors-and-red-debug-geometry) · [Ownership conflict](#old-output-or-ownership-conflict)
+- **Sky:** [Wrong or white sky](#wrong-white-or-dark-sky)
+- **In Sapien:** [Player start underground](#the-camera-or-player-start-is-underground)
+- [Reporting a bug](#reporting-a-bug)
 
-Copies paste at the original position. Use the Outliner to select one, then move it. Preview copies are promoted to normal objects in this build. If the problem persists, report the mode, selection, proportional-editing state, and exact move operation.
+## Setup
 
-## The Asset List is empty
+### The HaloBridge tab doesn't appear
 
-**Detect folders** does not index every map. Use **Choose .map file** to pick or type a valid installed `.map` filename and click **Index Map Assets**. Clear Search Assets, select **All Levels**, check category buttons, and inspect the Imported/Hidden tabs. Hiding a list entry does not hide an already placed Blender object.
+- Make sure the add-on is ticked in **Edit → Preferences → Add-ons**. Expand it: an error there names the problem.
+- The tab is in the 3D View's sidebar: hover over the viewport and press **N**.
+- You installed the release ZIP (**HaloBridge-0.10.0.zip**), not GitHub's "Source code" ZIP or the `-source` ZIP.
+- After updating, restart Blender.
 
-## Preview takes a long time / whole-map import is slow
+### Detect folders didn't find my folders
 
-The first use extracts geometry and converts textures. Whole maps can contain thousands of placements and many BSPs; several minutes can be normal. Repeat imports reuse cached output. Watch progress and the report rather than repeatedly clicking Import. Cancel is checked between operations; an individual large decode can take time.
+Detect folders searches every Steam library, `SteamLibrary` folders at the root of local drives, Foundry's settings, and Xbox app / Game Pass installs (`XboxGames`). It only fills **empty** fields and only accepts a maps folder that actually contains `.map` files.
 
-## Missing or flat ground textures
+- If a field already had a wrong path, clear it and click **Detect folders** again.
+- If the game's content isn't downloaded in MCC, the maps folder won't be found. Check MCC's installed content.
+- For other locations (an external drive, a custom folder), set the path yourself with the field's folder button. Use the kit folder that contains `tool.exe`, and the folder that contains the `.map` files.
 
-Use Blender's **Material Preview** shading. The starter shell needs the jungle map and its textures; an older saved shell is not updated automatically. Check the import report and material image references. Preview shaders approximate Halo's layered rendering and may differ from Sapien.
+### Check setup reports problems
 
-For Sapien, the material must reference an existing H3EK shader tag and its dependencies. **Assign existing Halo shader** changes the active material's game tag reference; selecting a row in the asset list alone does not assign a shader to your scene object. Shader paths are relative to the kit's `tags` directory and normally omit the extension, not paths to a PNG or DDS image.
+Check setup checks the **whole** workflow, including Sapien preparation, so some messages may not matter for what you're doing. Compare with [What each task needs](INSTALLATION.md#what-each-task-needs).
 
-## Wrong sky / offset imported sky
+| Message mentions | Fix |
+| --- | --- |
+| Halo Asset Blender Development Toolset | Install and enable it (v432 or newer; v364 also works on Blender 4.0). |
+| "cannot export on Blender ... (Python 3.13)" | Your toolset is too old for Blender 5.x. Install the current release. |
+| Editing Kit folder / `tool.exe` / `ManagedBlam.dll` | The kit path is wrong or points at a subfolder. Use the folder containing `tool.exe`. |
+| tag archives / `deadlock.scenario` | The kit's tags aren't extracted. See [Installation](INSTALLATION.md#1-install-the-games-and-mod-tools). |
+| MCC maps folder | The maps path is wrong or empty. |
+| .NET 10 Desktop Runtime | Install the **Desktop** runtime, **x64**, then restart Blender. |
+| .NET Framework 4.8 | Install .NET Framework 4.8. |
+| Helper missing | Reinstall the release ZIP. |
 
-Use **Scan for map skies → Sky** to explicitly choose an installed scenario's primary sky. Imported sky meshes keep source placements for visual reference, but are omitted from solid geometry during preparation. The game sky comes from the selected Editing Kit scenario. This does not convert all weather, fog, secondary skies or baked lighting from a compiled `.map`.
+### A helper won't start
 
-## “Level name must be 3–32…”
+HaloBridge runs two small programs from its `bin` folder. If Windows security or antivirus software blocks them, the report says the helper failed to start. Reinstall from the official release ZIP and, if your security software quarantined a file, restore it. Don't turn off your security software entirely.
 
-Edit **Output Level Name (without .map)**, near the preparation controls. Use `my_first_map`, not a filepath or `my_first_map.map`. Start with a lowercase letter; use only lowercase letters, numbers and underscores, with 3–32 characters total.
+## Importing
 
-## Missing BSPs, access denied, or approximate variants
+### The asset list is empty
 
-Read **Open map import report**. Check that the maps and resource files are available and the chosen storage folder is writable. Close tools holding files open and choose a writable local storage folder if needed; do not disable security software. Retry with **Repair incomplete map import**. If a file is locked or blocked, address that specific file before retrying.
+**Detect folders** sets folders but doesn't index anything. Choose a map with **Choose .map file** and click **Index .map Assets** (or choose a scenario and click **Index .scenario Assets**). If the list still looks empty: clear **Search Assets**, choose **All Levels** and **All Sources**, turn on every category toggle, and check you're on **Imported Assets** rather than **Hidden Assets**.
 
-Invalid palette references, missing render models, bind-pose warnings and approximate permutations are importer limits. Some cutscene-only content may not have recoverable static geometry. Continuing preparation exports only what exists in Blender; it does not recover missing terrain or animation.
+### The map picker is empty or a map isn't found
 
-## Prepare fails or only shows a short message
+The picker lists the files directly inside the **.map Files** folder for the current game. Check the path, then reopen the picker (it refreshes each time). You can also type a filename including `.map`. Remember Halo 2 uses `halo2\h2_maps_win64_dx11`.
 
-Open **HaloBridge Warnings and Messages → Open diagnostic report**. The report collects detected issues, but later stages cannot be tested until earlier failures are fixed. The header control is accessible without scrolling to the bottom of the sidebar. Include sanitized report text in a bug report.
+### Importing or previewing is slow
 
-Close Sapien before preparation. Verify the required exporter version, shader tags and runtimes with **Check setup**. For invalid geometry, isolate a small problematic group and inspect its topology. Continue with warnings accepts known omissions; it cannot override a compiler failure.
+The first use of an asset or level extracts geometry and converts textures, and a whole level can contain thousands of objects and several BSPs. Several minutes can be normal for big campaign levels. Later imports reuse the cache and are much faster. Watch the progress line instead of clicking again. Cancel works between steps; a single big step can take a while to finish.
 
-## Old output or ownership conflict
+### Textures are missing, white or flat
 
-Use a new **Output Level Name (without .map)** if it was generated by the old original-map copying workflow, belongs to another project, or lacks a matching ownership manifest. Keep the old output and project records. Do not delete manifests to force an overwrite. Save Sapien edits and review any ownership conflict before resolving it.
+- Switch the viewport to **Material Preview**.
+- For `.scenario` imports, set the game's **.map Files** folder too: textures come from the matching map. A shader that isn't in that map has no preview texture.
+- Halo: CE / Halo 2 assets imported with an older version: select the material and click **Load Halo Shader Textures/Masks for Currently selected Material**, or re-import.
+- Halo's layered shaders, reflections and lighting are approximated in Blender, so some surfaces will look different from the game.
 
-## Player starts underground
+### Missing BSPs or objects after a whole-level import
 
-New scenes place a start above an exposed surface near the cursor, but existing starts are preserved. Adjust an existing start in Sapien after changing terrain. Sapien's editor camera is separate and may keep an old underground position. Do not confuse an underground camera with missing exported terrain.
+Read the import report. Make sure the maps folder is complete (shared resource maps must stay next to level maps) and the storage folder is writable. Some content can't be recovered as static geometry (cutscene-only objects, Reach's developer-only BSPs). Approximated variants are listed as such.
 
-## Report a problem
+### .scenario import problems
 
-Use the repository's **Issues → New issue → Bug report**. Include HaloBridge, Blender and exporter versions; the map name; whether it is first extraction or a cached repeat; exact steps; and sanitized diagnostic text. Attach no Halo assets, map files, tags, caches, or blend files containing game data.
+- **"BSP has no source"** — that BSP tag doesn't contain its source file. Use **Import entire .map** for that level.
+- **Halo: CE / Halo 2 build fails** — the kit's Tool couldn't build the scenario. The report includes Tool's output. Make sure the kit folder is right and its tags are intact.
+- **Reach geometry missing** — set the Reach **.map Files** folder; Reach geometry comes from the map.
 
+## Editing
 
-## Preparation appears stuck on creating initial planes
+### Moving one object moves others
 
-Use **Open live activity log** or **Open live compiler output** in Map Preparation Status. These open Blender's Text Editor and refresh during preparation. Return that area to the 3D View when finished. Full logs are saved in the managed `jobs` folder; the activity log includes the raw compiler log path.
+Turn off **Proportional Editing**: hover over the viewport and press **O** (the circle icon in the viewport header shouldn't be highlighted). Also check you're in Object Mode with only one object selected, and that the objects aren't parented to each other.
 
-The five stages are scene export, materials, geometry/collision compilation, sky/scenario setup, and lighting/final checks. They are not equal in duration. A compiler message such as `creating initial planes... 1%` refers only to that substep, not complete preparation. Halo does not supply a reliable total time remaining.
+Linked copies (**Alt+D**, swaps, instanced BSP geometry) share one mesh: moving them in Object Mode is independent, but editing vertices in Edit Mode changes all of them. Use **Object → Relations → Make Single User → Object & Data** to give one its own mesh.
 
-The display includes elapsed time, time since compiler output, CPU activity (100% means one full CPU core), and resident memory. An active CPU means the process is executing, not that it will necessarily finish successfully. Little CPU activity or no output alone does not prove a hang.
+### Swapped assets have a different size
 
-Check the **Main structure** event for the object name and evaluated triangle count. A visually small scene can still contain heavily subdivided terrain. The current exporter uses an actual scene mesh as the main structure and generates collision from current surfaces. Dense structure geometry can be expensive to compile. Reduce unnecessary subdivisions on a copy of your terrain and test that copy if appropriate; the addon does not silently simplify your geometry. Turning off test lighting will not speed up the earlier structure compilation step.
+This is by design: a swap keeps each object's position and rotation, but the asset keeps its original size. Scale the results afterwards. Placing from a preview keeps the preview's scale instead.
 
-Use **Cancel preparation** to stop a background build and restore the previous successful output. Finish or cancel active jobs before restarting Blender to load an addon update.
+### Flickering surfaces or a grey, cut-off view
 
+- Distant geometry fading to grey or disappearing: click **Remove Grey Blender Fog (View Distance)**.
+- Flickering where surfaces overlap: a very wide clip range reduces depth precision. In the viewport's **View** panel (N sidebar → View), raise **Clip Start** (for example 1 m) and lower **Clip End** to what you need.
+- Glass and other see-through surfaces with a back face: HaloBridge gives them backface culling when you load the material. Reload older materials with **Load Halo Shader Textures/Masks**.
 
-## Red trees or red overlapping-surfaces labels in Sapien
+## Preparing
 
-These labels are compiler debug geometry, not a new visible collision asset. Check the preparation report for geometry warnings even when compilation succeeded. Automatic collision now tries verified source collision geometry. Check the object route in the preparation report to see whether the build used original collision, a box or mesh surfaces.
+### Output level name is rejected
 
-Automatic collision handling excludes materials using Halo's foliage shader class and the verified Citadel `cit_tree_leafc` leaf material, while retaining bark and ground collision. Other generic leaf shaders cannot be identified reliably by transparency or name alone. Select the tree in Blender, select its leaf material under **Collision**, then choose **Render only (no collision)** and prepare again. Do not apply this to the trunk or ground if you need them collidable. Material settings are shared by all objects using that material.
+Use 3–32 characters: lowercase letters, numbers and underscores, starting with a letter. No `.map`, no spaces, no capitals, no folders. Example: `my_first_map`. The old placeholder `Level_Name_Here` must be replaced.
 
-Use **Collidable** to override automatic treatment deliberately. Original source tags and Blender geometry are not modified by these export flags. Existing overlapping or duplicate solid surfaces may still need correction. After rebuilding, reload the resulting scenario and current warning geometry; old debug overlays can be stale. Hiding a warning overlay alone does not correct collision.
+### Prepare fails
 
-See [c20 Halo 3 material flags](https://c20.reclaimers.net/h3/source-data/h3-materials/).
+1. Open **Open diagnostic report**. It lists every issue found so far; later stages can't be checked until earlier ones pass.
+2. Close Sapien and try again (Tool can't write to a level Sapien has open).
+3. Run **Check setup**.
+4. For geometry errors, the report names the Blender object. Hide or delete it and prepare again to confirm, then fix its mesh.
 
-## Check setup asks for Mod Tools, but I only want Blender assets
+**Continue with warnings** accepts known omissions; it can't get past a compiler error. When a build fails, the previous successful version of the level is restored.
 
-Check setup checks the full workflow. See the [requirements matrix](INSTALLATION.md#requirements) before interpreting every warning as an import blocker. MCC maps supply meshes/textures; the Editing Kit supplies tags and compilation tools. An individual Halo 3 BSP-instance placement does call H3EK for collision data, so that error needs a real kit/tag setup. Do not put MCC maps in the kit's tags folder.
+### Preparation seems stuck
 
-## Map picker is empty or a filename is not found
+Open **Open live activity log** or **Open live compiler output** in **Map Preparation Status**. The status shows elapsed time, time since the compiler last printed something, CPU use (100% = one full core) and memory. A busy CPU means it's working.
 
-Verify the selected game's `.map Files` directory and reopen the dropdown; it refreshes when opened. It lists files directly inside that directory. You can still type the filename, including `.map`. Custom maps need their referenced shared resources, and unsupported cache variants may fail extraction.
+The longest stage is usually geometry and collision. A compiler line like `creating initial planes... 1%` is one sub-step, not the whole build. Very dense meshes (heavily subdivided terrain) are slow to compile: the **Main structure** line in the activity log names the object and its triangle count. Test lighting adds 16 more stages; turn it off for faster tests.
 
-## Cluster 0 / too many vertices, triangles or strip segments
+**Cancel preparation** stops the build and restores the previous version.
 
-Cluster numbers are regions produced by Halo Tool, not Blender object names. Read the report's **Structure geometry context** and the activity log's **Main structure** event for the Blender source object and evaluated triangle count. That identifies a structure source, not the exact failing faces. Inspect that object's mesh and modifiers; a dense grid may be baked into the mesh with no subdivision modifier left to disable.
+### Cluster / too many vertices, triangles or strip segments
 
-Several independent limits can apply. Removing forced two-sided faces does not guarantee a terrain cluster meets strip limits. A smaller test copy, a reversible terrain reduction, or a properly designed portal/cluster layout may be needed. HaloBridge does not automatically simplify or split geometry. The demonstrated 32,768-to-8,191-triangle terrain reduction is one test result, not a universal threshold or automatic feature.
+"Cluster" numbers come from Tool, not from Blender. The report's **Structure geometry context** and the activity log's **Main structure** line name the Blender object. Reduce the density of that mesh (on a copy first), or split a huge terrain into several objects. HaloBridge doesn't simplify geometry for you. Very large single models are automatically split into aligned pieces to stay within Halo's per-instance limit.
 
-## Plane builder unable to converge / open or degenerate edges
+### Collision errors and red debug geometry
 
-These are compiler geometry/collision failures, not a missing sky texture. Open single-sided surfaces now receive the appropriate non-manifold surface flag during export. This avoids forcing double-sided rendering, but does not repair every invalid connection, duplicate face or self-intersection. Inspect the named asset and isolate a small test. Alpha presence alone does not mean a surface should have no collision: glass may be collidable. For decorative foliage, use the per-material collision control deliberately.
+- **Ambiguous or degenerate edges** — HaloBridge automatically recompiles that object with a simple box, then without collision, and lists it in the report. Walk into it in Sapien to check.
+- **Red trees or "overlapping surfaces" labels in Sapien** — these are Tool's debug markers, not a visible asset. They point at overlapping or duplicate faces. The report lists them by object name.
+- **Leaves you can't walk through** — Automatic makes Halo foliage shaders walk-through. For other leaf materials, tick the Halo toolset's **Render Only** flag in Material Properties (not on trunks or ground you want to stand on).
+- **Plane builder unable to converge / open edges** — the mesh has holes, duplicate faces or self-intersections. Clean it up, or set its **Object collision** to **Simple box**.
 
-## Where did preparation stop?
+### Old output or ownership conflict
 
-Check the lower **HaloBridge Warnings and Messages** panel directly above Map Preparation Status. It mirrors the top panel, including ACTION REQUIRED and relevant actions. Reports open at line 1; live activity/compiler logs expose detailed progress. Continue with warnings does not override hard compiler limits. Save and restart Blender after installing an update if the old interface persists.
+HaloBridge only overwrites a level it created itself (it keeps a record in its `projects` folder). If the name belongs to something else, or the record is missing, use a new **Output Level Name**. If Sapien changed the level since your last build, HaloBridge asks before replacing its placements. Don't delete project records to force an overwrite.
 
-## Swap size differs from my cube
+## Sky
 
-This is intentional: replacement assets use their original import scale, preserving the selected objects' world position/rotation and collections. Scale the resulting placements afterward if needed. For direct placement from a preview, its edited preview transform is retained instead.
+### Wrong, white or dark sky
 
-## Collision edge on a Phantom or other instance
+- Choose the sky explicitly: **Sapien Sky → Game → Sky**. For the destination game, click **Scan for map skies** first.
+- A converted sky chosen with an older version looks white: choose it again.
+- A converted sky looks grey (Halo: CE clouds) or very bright (Halo: CE / Halo 2 layers): that's a known limit of the conversion.
+- A dark level with a converted sky: turn on **Generate Test Lighting**. HaloBridge lights the level with a kit sky first because converted skies carry no lighting.
+- If you picked another game's sky but none is placed, preparation stops and says so.
 
-When Tool confirms the structure imported successfully, HaloBridge lists an isolated degenerate instance collision edge as a warning. Walk against that asset in Sapien to check the result. Other compiler errors can still stop the build.
+## In Sapien
 
-## Flickering glass or large map viewport
+### The camera or player start is underground
 
-Version 0.9.1 detects transparent triangles with matching opposite-facing mates and uses backface culling on local material copies. Saved meshes need a fresh material load to run that check. Genuine duplicate geometry and other transparency cases can still require inspection.
+A new level gets a player start above the ground near the 3D cursor. Sapien's **editor camera** is separate and remembers its last position, so it can start underground; fly up to your level. Existing player starts are kept on later builds, so move them in Sapien if you change the terrain.
 
-An extreme viewport Clip Start/End ratio can worsen depth precision. Adjust the range for the area being edited. In the tested Snowbound copy, Clip Start 1 and End 100000 replaced 0.01 and 9999999. These are scene-specific examples. Save a copy before changing your view setup.
+## Reporting a bug
 
-## Gray Snowbound metal or missing purple detail
+Open [Issues → New issue → Bug report](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/issues/new/choose) and include:
 
-The old preview displayed the base mask while skipping detail blending and a second detail texture. Restart Blender with v0.9.1, select the affected original material and click Load Halo Shader Textures/Masks for Currently selected Material. The source map must contain its shader. Supported Halo 3 detail operations now include the Snowbound two-detail-overlay shader. Lighting and reflections can still differ from Halo.
+- HaloBridge, Blender and Halo toolset versions,
+- the game and map or scenario,
+- whether it was a first import or a repeat,
+- exact steps,
+- the diagnostic report text, with personal folder names (like your Windows user name) removed.
 
-## Shader category still shows the wrong entries
-
-Restart Blender after updating, click Scan existing shaders, then choose Filter by level / category. Check the displayed count before opening Choose an existing shader. The popup captures this category until it closes. Choose All levels / shared shaders to search everything. If the category changes while a popup is open, reopen it. Assignment targets the active material shown in the panel and affects its shared users.
-
-## Large Elite or instance render-index overflow
-
-Version 0.9.1 can export an oversized static instance as multiple aligned Halo instances. The Blender object stays one editable model and retains its visible triangles. This was tested with the painted Reach Elite that previously exceeded the render-index limit. Cluster and main-structure errors still need their own geometry fixes.
-
+Don't attach maps, tags, caches or `.blend` files containing game content.

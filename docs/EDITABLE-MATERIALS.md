@@ -1,34 +1,58 @@
 # Editable materials (experimental)
 
-HaloBridge can author UV-painted terrain and masked colors for static Halo 3 level geometry. It bakes the edited surface into level-local bitmap and shader tags. Stock game tags are not edited.
+[Home](../README.md) · [Sidebar reference](FEATURES.md#editable-materials-experimental) · [First map](FIRST-MAP.md)
 
-## Read the source material
+Editable materials let you paint terrain and recolor models in Blender, then have preparation bake the result into **new** Halo 3 bitmaps and shaders inside your level's folder. The original game tags are never changed.
 
-Select a placed mesh and its material slot. Choose the correct import game and a .map containing that shader, then click **Load Halo Shader Textures/Masks for Currently selected Material**. Terrain blend maps and layers now contribute to the Blender color preview. Color-change masks become available to the color editor. This remains an approximation of Halo rendering, not a reproduction of every shader option, lighting or reflection.
+All controls are in the **Editable Materials (Experimental)** section of the sidebar and work on the **selected object's active material slot**.
+
+## 1. Load the original textures
+
+Select the object, pick its material slot in Blender's Material Properties, and make sure **Import game** is the game the material came from. Then click **Load Halo Shader Textures/Masks for Currently selected Material**.
+
+HaloBridge reads the material's shader from its `.map`, including terrain blend maps, detail layers and color-change masks, and rebuilds the Blender preview. Check that the preview looks right before converting.
 
 ## Paint terrain
 
-1. Select terrain and its original Halo material slot. Load its source textures with **Load Halo Shader Textures/Masks for Currently selected Material**. Confirm the blended preview before continuing.
-2. Click **Create paintable terrain**. Supported layered terrain retains its source blend and gains a paint overlay. An older editable material that was already reduced to one texture needs a fresh conversion from the original material to recover the source blend.
-3. Choose a texture resolution from **512, 1024, 2048 or 4096**. Expand **Repeat settings** to adjust tiling with compact X/Y/Z controls. UV sampling uses X/Y.
-4. Click a numbered shader-layer paint button and paint on the mesh in Texture Paint mode. Layer numbers refer to the source shader's textures, so inspect the images when choosing grass, rock or another surface. **Paint original blend** restores the underlying source mixture. Older three-layer editable materials retain their existing mask interpretation.
-5. Use the small texture brush buttons to paint a selected image directly. A red mask in the Image Editor represents a layer weight. View the mesh in Material Preview to see the mixed surface.
-6. Click **Pack texture edits into blend**, then save. Return to Object Mode and prepare the scene to bake the color and normal textures into level-local tags.
+Halo terrain blends up to four shaders (for example grass, rock, dirt and sand) using a blend map. A paintable terrain lets you repaint where each one shows.
 
-Terrain painting needs unique UVs in a single tile. Conversion can normalize the active material's used UV range while compensating its original texture sampling. Overlapping UVs still paint the same area. Large terrain can lose fine detail when baked to one image. Custom export produces baked textures, with the selected resolution determining the available detail.
+1. Load the original textures (above).
+2. Click **Create paintable terrain**. The material becomes an editable copy that starts with the level's original blend.
+3. Choose a **Texture resolution**: 512, 1024, 2048 or 4096. This is the size of the baked texture, so bigger terrain needs a higher value.
+4. Expand **Repeat settings** to change how often each layer's texture tiles (X and Y are used).
+5. Each layer has its own collapsible section, **Shader 1** to **Shader 4**, named after its texture. Open one to see its base, detail and normal images.
+6. Click **Paint** in a layer's header. Blender switches to Texture Paint with that layer selected; paint on the mesh to show that layer there.
+7. **Paint original blend** paints the level's original mix back.
+8. Click **Pack texture edits into blend**, then save your `.blend`.
+9. Prepare the level. HaloBridge bakes the color and normal result into textures and a shader under your level.
 
-## Recolor armor or vehicles
+Tips:
 
-Load the source shader textures first, then click **Create editable colors** on the desired material slot. Colors 1-4 correspond to R, G, B and alpha in the mask. A source Halo change-color mask is used when available. Without one, Color 1 initially affects the whole selected material; load or paint a mask to limit it. The mask source is displayed in the panel.
+- Look at each layer's images to see which number is grass, rock and so on; numbers follow the original shader.
+- Terrain painting needs non-overlapping UVs in one 0–1 tile. HaloBridge adjusts the UV range when converting and compensates the texture tiling. Overlapping UVs paint the same spot twice.
+- The starter template's **Jungle ground** is already a paintable terrain.
+- Small brush buttons next to each image paint that image directly. In the Image Editor, a red mask shows a layer's weight.
+- If an older editable material was already reduced to one texture, convert again from the original material to get its layers back.
 
-For an original Halo 3 vehicle, choose its exterior material slot, click **Create editable colors**, and adjust the tint. Preparation bakes the painted slots and creates a vehicle, model and render model under the output level. These tags reference the original gameplay and physics resources. Other shader slots keep their original references. Turrets or other attachments with their own render models are separate. Custom colors represent fixed paint rather than AI rank or team-color logic.
+## Recolor models and vehicles
 
-## Limits and preservation
+**Create editable colors** gives a material a base texture plus four tint colors controlled by a mask.
 
-- Editable material creation assigns a separate material to the active slot and makes a shared mesh local before changing its slots.
-- Custom masks and image edits can be packed into the blend; they should be packed and the blend saved before closing.
-- Color and normal maps are baked; live Halo color changes, shader reflections, specular layering, animation and other engine effects are not reproduced.
-- Node edits must remain UV/image-based. Unsupported nodes and out-of-tile UVs are reported before export.
-- Original Halo shader preview improvements alone do not turn an imported stock shader into an editable exported shader. Create an editable material to export changes.
+1. Load the original textures.
+2. Click **Create editable colors**.
+3. Set **Color 1** to **Color 4**. They follow the mask's red, green, blue and alpha channels. If the original shader has a Halo color-change mask, that's used; otherwise Color 1 starts by covering the whole material, and you can load or paint a mask to limit it. The panel shows which mask is in use.
+4. Pack your edits and save.
+5. Prepare. The tinted result is baked into new textures.
 
-Existing indexed source maps help locate shaders when a different map is selected. Editable Colors supports UVs beyond the first tile for repeating textures with whole-number tiling. Terrain painting still requires a single UV tile.
+**Original Halo 3 vehicles:** first match the vehicle (see [Keep a vehicle drivable](FIRST-MAP.md#keep-a-vehicle-drivable)), then select its exterior material slot and click **Create editable colors**. Preparation creates a copy of the vehicle, model and render model tags under your level that uses your paint and still points at the original gameplay and physics. Other material slots keep their original shaders. Turrets and other attachments with their own models aren't repainted. The paint is fixed, so it doesn't change with team colors.
+
+**Characters and shields** (for example a Reach Elite placed as static geometry) work the same way; the result is static geometry.
+
+## Things to know
+
+- Converting assigns a new material to the active slot. A shared mesh is made single-user first so other copies don't change.
+- Pack images and save before closing Blender, or your paint is lost.
+- Only color and normal maps are baked. Live color change, reflections, specular, animation and other engine effects aren't reproduced.
+- Keep node edits UV- and image-based. Unsupported nodes and UVs outside the tile are reported before export.
+- Editable colors support UVs beyond the first tile for repeating textures with whole-number tiling. Terrain painting needs a single tile.
+- Loading original textures only changes the preview. To export changes, create an editable material.

@@ -1,47 +1,55 @@
-# HaloBridge v0.9.1 — known limits and community testing
+# Known limits
 
-[Home](../README.md) · [Verification history](../TESTING.md)
+[Home](../README.md) · [Supported games](GAMES.md) · [Troubleshooting](TROUBLESHOOTING.md) · [Verification history](../TESTING.md)
 
-## Supported target
+HaloBridge v0.10.0 is a beta. This page lists what it doesn't do yet, so you know what to expect before you build on it.
 
-Windows x64, Blender 4.0.0, Halo exporter v364 or v432, and locally installed PC MCC maps. H3EK with extracted tags is required for Halo 3 Sapien preparation and the current individual Halo 3 BSP-instance placement route; see the [requirements matrix](INSTALLATION.md#requirements). Experimental MCC Halo: Reach importing and static conversion into Halo 3 are also available. Other exporter versions, console inputs and universal MCC conversion are not supported.
+## Platform
 
-## Current limits
+- Windows x64 only. Blender 4.0 to 5.2.
+- The Halo Asset Blender Development Toolset must be v432 or newer on Blender 4.1+ (v364 or v432 on 4.0).
+- MCC on PC (Steam or Xbox app / Game Pass). Console files aren't supported.
 
-- **Static export:** doors, animated objects, breakable behavior, AI, scripts, triggers and multiplayer modes are not reconstructed. Add gameplay in Sapien separately.
-- **Original vehicles:** explicitly matched Halo 3 model previews can use existing vehicle tags. Edited vehicle meshes and Reach vehicle conversion are not supported; actual driving and multiplayer need a playtest.
-- **Collision:** Automatic tries verified original geometry, then box or current-surface fallback. Opaque faces are not automatically doubled; open single-sided meshes use non-manifold surface flags. These flags do not repair arbitrary self-intersections or duplicates. Original collision shapes, special surface behavior and material distinctions are not fully retained.
-- **Visual fidelity:** preview textures and variants can be approximate. Water, layered shaders, fog, weather and baked lighting may differ from the game.
-- **Whole-map coverage:** not every BSP or object is guaranteed to decode. Import reports identify known omissions. Campaign BSPs are assembled together rather than streamed as in game.
-- **Compilation:** imported render geometry can be invalid for Tool, exceed limits or contain overlapping surfaces. A warning confirmation cannot make invalid geometry compile.
-- **Lighting:** a draft preset is provided for testing. There is no multi-quality lighting selector or final-lighting workflow in this release.
-- **Large maps:** preparation time, memory, visibility and runtime limits remain. Project Reclaimer packaging and multiplayer verification are separate work.
-- **Project portability:** local paths and ownership manifests require care when changing computers or storage. Forced termination may interrupt rollback.
-- **Release validation:** a second clean Windows machine and broad map/version coverage have not yet been tested.
+## Importing
 
-## Feedback most useful for the next release
+- **Static content only.** AI, scripts, triggers, game types, animations, doors that open and break, and baked lighting aren't imported. A whole-level import is a visual starting point, not the playable mission.
+- **Placement types.** From a `.scenario`, scenery, crates, machines, controls and vehicles are built; weapons and equipment are imported for reference only. Bipeds, decals, decorators, lights, cutscene flags, AI and zone sets aren't imported. All BSPs import together; zone sets aren't applied.
+- **Source files.** Halo 3 / ODST `.scenario` import needs the source files stored inside the kit's BSP and render model tags. A BSP without one is skipped and reported; a render model without one uses its `.map` mesh.
+- **Preview textures** come from the matching `.map`. A shader that isn't in that map has no preview texture.
+- **Reach** `.scenario` geometry comes from the `.map` (default variants), because HREK has no source models. Reach's developer-only BSPs don't decode.
+- **Halo: CE and Halo 2** `.scenario` import uses a map built by the kit's Tool, so instance names and material flags are the map's, not the authored source's.
+- **Whole-map coverage.** Not every BSP or object is guaranteed to decode; the import report lists what's missing. Campaign maps load every streamed area at once.
+- **Material previews** approximate Halo's rendering. Layered shaders, water, reflections, glow, fog and lighting can look different.
 
-1. Fresh-install reports with exact Blender/exporter/runtime versions.
-2. Small, reproducible extraction or material failures, using map and asset names rather than uploaded game content.
-3. Current-scene export checks: edited shapes, deleted pieces, moved instances, collision and repeat preparation.
-4. Measurements of import time, repeat-cache time and memory as scene size grows.
-5. Clear documentation improvements and minimal code fixes with synthetic tests.
+## Sapien preparation
 
-Future work may improve these areas, but this is not a promise of complete map reconstruction or a release schedule.
+- **Destinations:** Halo 3 and Halo 3: ODST. Reach Sapien preparation isn't available (the Halo toolset's ASS exporter only targets Halo 2 and Halo 3). Halo: CE and Halo 2 levels can't be prepared either; their assets can be used in a Halo 3 level.
+- **What's exported:** your current meshes as static geometry, plus unedited original scenery and matched vehicles as their original tags. Gameplay must be added in Sapien.
+- **Original vehicles:** Halo 3 / ODST vehicles only, matched to their own model. Mesh edits don't carry over; other games' vehicles become static shapes.
+- **Collision:** original collision is reused only when HaloBridge can prove the mesh is unchanged and the source game's kit is installed (Halo 3, ODST, Reach models). Otherwise a box or the mesh's surfaces are used. Halo: CE and Halo 2 objects never reuse original collision. Fallback collision can feel different from the original.
+- **Converted materials** (from other games) keep base color, normal map, UV tiling and cut-out transparency. Detail layers, blend modes, reflections, glow and animated effects aren't converted. Converted bitmaps are uncompressed, so large scenes need more disk space and memory.
+- **Converted skies** keep geometry and base, normal and alpha textures. Sky lighting, fog, atmosphere and animated clouds aren't converted. Halo: CE clouds look grey, and Halo: CE / Halo 2 skies blend additively and can look bright.
+- **Lighting:** only a draft test lighting preset. There's no final-quality lighting option.
+- **Compiler limits:** imported geometry can be invalid for Tool, exceed its limits, or overlap. HaloBridge reports this but doesn't simplify geometry for you.
+- **Editable materials** bake to one UV tile per material, so large terrain can lose detail.
+- **Repeat builds** keep content you added in Sapien, but this hasn't been tested on every kind of map. Keep backups.
 
-## Import-only setup caveat
+## Projects and portability
 
-Check setup currently checks full-workflow prerequisites even for Blender-only use. Indexing and visual extraction do not automatically require every reported Editing Kit feature. Individual Halo 3 BSP-instance placement is an exception: it calls the tag helper for collision data. The minimum-dependency import-only configuration has not been validated on a second clean machine.
+- Saved `.blend` files refer to textures in the HaloBridge cache. Keep the cache or pack resources before moving a project to another PC.
+- Project records in the storage folder are tied to the paths on your PC.
+- Forcing Blender to close during preparation can interrupt the automatic rollback.
 
-Halo 3 is the only Sapien destination. Reach importing/static conversion is experimental. Halo CE, Halo 2, ODST and Halo 4 are reserved in the shared framework but are not enabled.
+## Not tested yet
 
-Painted terrain exports as a baked UV tile. Large surfaces may lose detail. Masked colors apply to static geometry. Original vehicle placements use the colors supplied by their tags. [Editable materials](EDITABLE-MATERIALS.md).
+- A full multiplayer release through Project Reclaimer.
+- Every map in every game. Large levels and unusual maps may hit new problems.
 
-## v0.9.1 scope
+## Feedback that helps most
 
-Original collision reuse is conditional on source identity, available tags, geometry matching and supported part selection. The fallback may change contact behavior. Recompiled static collision preserves the available shape, while gameplay, animation and detailed physics behavior depend on supported original object tags.
+1. Fresh-install reports with exact Blender, toolset and runtime versions.
+2. Small, reproducible import or material problems, named by map and asset (please don't upload game files).
+3. Preparation results for edited, moved and deleted objects, collision, and repeat builds.
+4. Import and preparation times and memory use on large levels.
 
-Internal instance partitioning addresses individual render-index limits. Large terrain clusters, visibility, lighting and overall map complexity can still fail compilation or perform poorly.
-
-Regular shader preview improvements currently target supported Halo 3 albedo modes. Reach conversion, water, reflections, glow and other engine effects remain approximate. Snowbound shader and paired-face checks do not establish correctness for every material or map. Whole-map round trips and Project Reclaimer multiplayer releases need independent testing.
-
+These areas may improve in future versions; this isn't a promise of complete level reconstruction or a release schedule.

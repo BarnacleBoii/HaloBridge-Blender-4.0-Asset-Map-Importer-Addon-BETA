@@ -1,82 +1,149 @@
-# Your first custom test map — HaloBridge v0.9.1
+# Your first Sapien test map
 
-[Home](../README.md) · [Installation](INSTALLATION.md) · [Feature reference](FEATURES.md)
+[Home](../README.md) · [Installation](INSTALLATION.md) · [Importing](IMPORTING.md) · [Sidebar reference](FEATURES.md) · [Troubleshooting](TROUBLESHOOTING.md)
 
-Only importing into Blender? Use the [Blender-only guide](IMPORTING.md) instead; this tutorial requires H3EK with extracted tags.
+This tutorial builds a small Halo 3 level in Blender, compiles it with one button and opens it in Sapien. It takes about 20 minutes. Start small: a floor and a few trees and rocks make problems much easier to spot than a full map.
 
-Start with a floor and a few trees or rocks. A small scene makes it easier to identify setup or material problems before building a large map.
+**Before you start:** complete [Installation](INSTALLATION.md), including H3EK with its tags extracted. Set **Import game** to Halo 3 and confirm **Check setup** passes.
 
-## 1. Find assets
+## How preparation works
 
-After completing the [H3EK preparation setup](INSTALLATION.md#4-add-halo-3-sapien-preparation), select or type `010_jungle.map` in **Choose .map file** and choose **Index Map Assets**. Indexing creates a searchable list; it does not extract every asset immediately.
+When you click **Prepare current scene for sapien**, HaloBridge:
 
-Use **Search Assets**, category buttons, and **Level Imported** to narrow the list. Unknown categories are still shown. **All Levels** shows entries from every indexed map.
+1. copies every visible mesh in your scene into a temporary export scene, with your edits and modifiers applied (your scene is never changed),
+2. matches each material to a Halo shader, or converts it if it came from another game,
+3. writes the geometry with the Halo toolset's ASS exporter and compiles it with H3EK's **Tool**, building collision as it goes,
+4. creates the scenario, sets the sky, adds a test player start, and writes original scenery and vehicles as placements,
+5. optionally bakes draft test lighting, then can open the level in **Sapien**.
 
-## 2. Preview and place
+The output goes to `H3EK\tags\levels\multi\<your level name>\`. If anything fails, the previous successful version of that level is restored.
 
-Put the 3D cursor where you want to work. Enable **Preview Mode**, then click an asset. Its temporary preview is centered at the cursor. Selecting another asset replaces the preview; switching preview off removes it.
+## 1. Start a scene
 
-Move or rotate the preview, then choose **Place asset(s)** to keep that transform as a normal placed object. Checked list entries take priority over the highlighted entry; clear checks when you only want one asset. Multiple checked models start together at the cursor.
+1. Open a new Blender file (**File → New → General**) and delete the default cube, camera and light.
+2. In **Folders and Setup**, click **Create starter level shell template**. It adds:
+   - a paintable **Jungle ground** plane with the original jungle terrain textures from the campaign level Sierra 117,
+   - a see-through **SkyBoundary** wall that shows roughly where the level's edge is (it's a guide only; preparation builds its own sky boundary),
+   - **Master Chief** for scale. He's never exported.
 
-Duplicate in Object Mode with **Shift+D**, or use copy/paste. **Alt+D** shares mesh data: Object Mode transforms are independent, but Edit Mode mesh edits affect linked copies. If nearby unselected copies move together, turn **Proportional Editing** off with **O** while the pointer is over the viewport. See [troubleshooting](TROUBLESHOOTING.md).
+   The template's assets come from `010_jungle.map`, so the Halo 3 maps folder must be set.
+3. If the far side of the ground looks grey or is cut off, click **Remove Grey Blender Fog (View Distance)**. It sets the viewport's Clip Start to 0.1 m and Clip End to 999999 m.
+4. Save the file (**Ctrl+S**).
 
-## 3. Make your geometry
+You can build your own floor instead. Any mesh works: a subdivided plane, a sculpted terrain, or a level imported with **Import level from .scenario** or **Import entire .map**.
 
-Choose **Create starter level shell template**, or build your own floor and walls. The starter shell needs `010_jungle.map` for its ground preview. Save the blend file.
+> **Scale:** HaloBridge works at 100 Blender units per Halo world unit (1 world unit = 3.048 m), and the scene's units are set so that sizes read correctly in metres. Preparation converts back automatically. Don't scale your scene by 100 yourself.
 
-New HaloBridge imports use 100 Blender units per Halo world unit. Export converts back automatically: do not multiply the scene by 100 again. Use consistently scaled assets from the current importer.
+## 2. Add some assets
 
-To texture authored geometry, load an indexed material with **Place asset(s)**, select your mesh, then use **Apply material to selected object**. Loading a material alone does not assign it. Assign the desired material to faces in Blender as needed. Alternatively, enter an existing Halo shader tag path and choose **Assign existing Halo shader** for the active material. A Blender image alone does not supply a game shader.
+1. In **Folders and Setup → Import entire .map**, choose `010_jungle.map` (Sierra 117) with the arrow under **Choose .map file**, then click **Index .map Assets**. Indexing takes a few seconds and fills the **Indexed Asset List**; nothing is extracted yet.
+2. In **Indexed Asset List**, type `tree` in **Search Assets**.
+3. Shift + right-click on the ground to put the **3D cursor** where you want a tree.
+4. Turn on **Preview Mode**, then click a tree row. The tree appears at the cursor. Click other rows to compare them.
+5. Rotate or move the preview if you like, then click **Place asset(s)**.
+6. Repeat with rocks or anything else. To copy a placed object, select it and press **Shift+D**.
 
-You can also greybox with cubes, select several, then use **Swap selected object(s) to selected index asset**. Replacement assets keep position/rotation but use their original scale. Avoid dense terrain subdivisions; visual map size alone does not determine compiler cost.
+Tips:
 
-## 4. Choose the sky and output
+- Turn on Blender's **Material Preview** shading to see textures.
+- **Alt+D** makes a linked copy that shares its mesh. Moving it is independent, but editing the mesh in Edit Mode changes every linked copy.
+- If moving one object also moves nearby ones, **Proportional Editing** is on: press **O** with the mouse over the viewport to turn it off.
+- You can also block out with cubes and use **Swap selected object(s) to selected index asset**. See [Importing → Greybox](IMPORTING.md#greybox-with-cubes-then-swap).
 
-Choose **Scan for map skies**, then select **Sky**. Automatic selection uses a single imported map's primary sky, otherwise High Ground. This reads your Editing Kit tags, so the source scenario must be installed.
+## 3. Check materials
 
-Enter an **Output Level Name (without .map)** such as `my_first_map`: 3–32 lowercase letters, digits or underscores, starting with a letter, without `.map`. Use a new name for this first test, especially if an older version created an original-map copy.
+Every surface needs a Halo shader. HaloBridge handles this automatically for:
 
-Move the 3D cursor above the intended starting area. A new scenario receives a test player start above an exposed surface near its XY position. Existing Sapien starts are retained on later exports.
+- **imported assets** — they keep their original shader, or are converted if they came from another game,
+- **the starter ground** — it's an editable terrain material that's baked to new textures when you prepare.
 
-## 5. Prepare and test
+For a mesh you made yourself, give it a shader one of two ways:
 
-Close Sapien. Choose whether to **Generate Test Lighting for Sapien Level**; leaving it off is faster for an initial geometry check. Choose **Prepare current scene for sapien** and read the warning popup. Continue exports the available current meshes, including edits, modifiers and deletions; cancel stops preparation.
+- **Use an indexed material:** select a material row in the asset list, select your mesh, and click **Apply material to selected object**.
+- **Pick any shader in the kit:** select your mesh and its material, open **Shaders**, click **Scan existing shaders** once, click **Choose an existing shader...** and search by name or folder (for example `rock`), then click **Assign shader to active material**.
 
-The lower **HaloBridge Warnings and Messages** panel sits above **Map Preparation Status**; the top panel remains available too. **ACTION REQUIRED** means you need to inspect the error or confirmation. Open the activity log for detailed progress. Stage percentages are not a total-time estimate.
+A plain Blender material with an image texture is not a Halo shader. Preparation reports any material it can't resolve.
 
-Compiler errors still stop the job. Read **HaloBridge Warnings and Messages → Open diagnostic report** for all issues found so far. Fix them and retry. A failed normal build restores the previous generated output.
+To paint the starter ground with grass, rock and dirt, see [Paint terrain](EDITABLE-MATERIALS.md#paint-terrain).
 
-When preparation succeeds, use **Open in Sapien** or the automatic open option. Inspect the geometry and test player placement. Sapien's saved editor camera can be underground even when the player start is above ground. Add gameplay content in Sapien as needed; exporting geometry does not automatically create a complete game mode.
+## 4. Check collision
 
-## Starting from an entire map
+Select an object and open **Collision → Object collision**:
 
-Use **Import entire .map** to bring in available terrain and static placements at original positions. It does not use the cursor or list filters. Read its import report before editing: missing pieces stay missing unless extraction recovers them.
+- **(Default) Automatic** — uses the object's original collision when HaloBridge can prove the mesh is unchanged, otherwise a sensible fallback (a box for characters and shields, the mesh's own surfaces for everything else). Leave this for almost everything.
+- **Mesh surfaces** — the object's own faces are solid.
+- **Simple box** — one solid box around the object. Useful for detailed props you only need to bump into.
 
-You can edit or delete those meshes and attempt preparation using the same steps above; full-map imports may require substantial cleanup before Halo Tool accepts them. The original map is not substituted for your edited scene. **Repair incomplete map import** retries missing pieces while preserving existing edits and intentional deletions. Whole campaign maps can be slow and include areas normally streamed separately.
+Foliage (leaves using Halo's foliage shader) is automatically walk-through. To make another material walk-through, tick the Halo toolset's **Render Only** flag on that material in Blender's **Material Properties**.
 
+## 5. Choose a sky
 
-## Original Halo 3 vehicles
+Open **Sapien Sky (Experimental)**:
 
-To keep an imported Scorpion or another supported Halo 3 vehicle functional instead of exporting it as static terrain:
+1. Leave **Game** on Halo 3.
+2. Click **Scan for map skies** (it reads your H3EK tags, so it may take a few seconds the first time).
+3. Choose a level from the **Sky** drop-down, for example `guardian`.
 
-1. Select its imported model in the **3D View**.
-2. Under **Selected Asset > Original Halo 3 Vehicle**, click **Find matching original vehicles**.
-3. Click **Use original Halo 3 vehicle** and choose the intended installed tag. Only tags linked to that render model are offered.
-4. Prepare the scene normally. Keep a terrain/floor mesh in the scene; a vehicle alone does not form a level.
+If you don't choose one, HaloBridge uses the sky of the level you imported, or Deadlock (High Ground). To use a Halo: CE, Halo 2, ODST or Reach sky, choose that **Game** instead; see [Use a sky from another game](IMPORTING.md#use-a-sky-from-another-game).
 
-The original vehicle tag supplies its model, collision, physics and behavior. The Blender object remains an editable placement preview and is omitted from the static geometry export. Position, rotation and positive uniform scale are transferred. Copies receive independent placement identifiers; repeat exports update moved vehicles and remove deleted ones while preserving independent scenario placements.
+## 6. Set up the build
 
-Mesh reshaping and modifiers cannot be transferred to an existing vehicle tag. Original-pivot changes are recovered when the cached preview still proves the unchanged shape. Blender material edits are not applied to the vehicle tag. Use **Use static mesh instead** to return to mesh export, where the original vertex limit applies. This route requires Halo 3 tags and is not Reach vehicle conversion or automatic campaign reconstruction.
+Open **(Experimental) Sapien Map Preparation**:
 
-Save and restart Blender after updating before using this feature. Vehicle tag creation was verified with the Scorpion; driving, multiplayer rules, respawn tuning and Project Reclaimer behavior need in-game testing.
+1. **Export to Sapien:** Halo 3.
+2. **Output Level Name (without .map):** change `levelname123` to a name of your own, such as `my_first_map`. Use 3 to 32 lowercase letters, numbers or underscores, starting with a letter. Each level needs its own name: preparing a different scene with the same name replaces that level.
+3. **Generate Test Lighting for Sapien Level:** turn this **off** for your first build. Lighting runs 16 extra Tool stages and can take a long time; you can turn it on once the geometry works.
+4. **Open Sapien when ready:** turn on if you want Sapien to start automatically.
+5. **Skip objects with export problems:** leave off for now.
 
-Background: [c20 Halo 3 scenario reference](https://c20.reclaimers.net/h3/tags/scenario/) and [Microsoft Halo 3 instance geometry](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/art/instanceobjects/instanceobjectshome). Original vehicle tags and static instance geometry are different export routes.
+**Player start:** a new level gets one test player start above the ground, near the 3D cursor's position. Put the cursor over the area you want to spawn in before preparing.
 
-For a painted floor, follow [Paint terrain](EDITABLE-MATERIALS.md#paint-terrain) before preparing. Pack the images and save your blend.
+## 7. Prepare
 
-## Review materials and collision before testing
+1. **Close Sapien** if it's open. Tool can't write to a level Sapien has open.
+2. Save your `.blend`.
+3. Click **Prepare current scene for sapien**.
+4. A popup lists anything HaloBridge noticed: objects that will be skipped, converted materials, edited scenery that becomes static geometry, and so on. Read it, then **Continue with warnings** or cancel and fix things first.
 
-Select each important object and check its active material in Materials and Shaders. Assign shader to active material sets its Sapien shader reference. Load the source shader textures when you want the Blender preview refreshed. Use the [editable-material guide](EDITABLE-MATERIALS.md) to export painted terrain or colors.
+While it runs, **Map Preparation Status** shows the current stage, the elapsed time, and what's still to come (scene export, materials, geometry and collision, sky and scenario, lighting / final checks). **Open live activity log** and **Open live compiler output** show every step. The stages take very different amounts of time; a compiler line like `creating initial planes... 1%` refers to one sub-step only. **Cancel preparation** stops the build and restores the previous version.
 
-Leave Object collision on Automatic to try matched original collision. Read the per-object collision routes in the preparation report after exporting. Inspect floors, foliage and barriers in Sapien, especially objects using a fallback. An oversized model may be internally divided into aligned instances. A successful Sapien compile still needs a playtest, followed by separate runtime and multiplayer testing for distribution.
+## 8. Test in Sapien
 
+When preparation succeeds, click **Open in Sapien** (or Sapien opens by itself if you turned that on). Then:
+
+- Fly around and check the ground, objects and sky.
+- Sapien's camera may start somewhere odd, even underground. That's the editor camera, not the player start; fly to your level.
+- Walk into objects to test collision.
+
+If something failed, read **HaloBridge Warnings and Messages → Open diagnostic report**. It names the objects involved and the reason. Fix them in Blender and prepare again; see [Troubleshooting](TROUBLESHOOTING.md).
+
+## 9. Keep iterating
+
+Edit your scene and click **Prepare** again with the **same level name**. HaloBridge keeps a record of which tags it wrote and updates only those, so content you add in Sapien (such as gameplay objects) is meant to stay. Existing player starts are kept. Repeat builds haven't been tested on every kind of map, so save in Sapien and keep a backup of the level folder before rebuilding a level you've put work into.
+
+Add game types, weapons, spawns and other gameplay in Sapien; HaloBridge only builds the level itself.
+
+## Going further
+
+### Start from an existing level
+
+Import a level with **Import level from .scenario (Recommended)** (or **Import entire .map** for levels without kit tags), edit it, and prepare it under a new name. Unedited scenery and vehicles keep their original tags; everything else becomes static geometry. Whole levels can need cleanup before Tool accepts them, and very large levels take a long time to compile.
+
+### Keep a vehicle drivable
+
+An imported Halo 3 vehicle is normally exported as a static shape. To keep it a real vehicle:
+
+1. Select it in the 3D View.
+2. Under **Selected Asset → Original Halo 3 Vehicle**, click **Find matching original vehicles**.
+3. Click **Use original vehicle tag** and choose the vehicle. Only vehicles that use this model are offered.
+4. Prepare as usual. Keep a floor in the scene; a vehicle on its own isn't a level.
+
+The original vehicle tag supplies the model, collision, physics and behaviour. Position, rotation and uniform scale are carried over; mesh edits aren't. **Use static mesh instead** switches back. To give it custom paint, see [Recolor vehicles](EDITABLE-MATERIALS.md#recolor-models-and-vehicles).
+
+### Use other games' assets
+
+Place assets from any game and prepare with **Export to Sapien** set to Halo 3. Materials are converted automatically. See [Use assets from any game](IMPORTING.md#use-assets-from-any-game-in-one-level).
+
+### Build for ODST
+
+Set **Export to Sapien** to **Halo 3: ODST** and set the H3ODSTEK folder (with **Import game** on ODST). Everything else works the same.
