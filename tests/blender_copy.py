@@ -26,17 +26,22 @@ class Layout:
     def __init__(self):self.labels=[];self.ops=[]
     def label(self,**kw):self.labels.append(kw.get('text',''))
     def operator(self,name,**kw):self.ops.append((name,kw));return self
+    def operator_menu_enum(self,name,property,**kw):return self.operator(name,**kw)
     def prop(self,*a,**k):pass
     def box(self):return self
     def row(self,**k):return self
+    def column(self,**k):return self
     def grid_flow(self,**k):return self
     def template_list(self,*a,**k):pass
     def separator(self,*a,**k):pass
 layout=Layout();layout.layout=layout
 bpy.context.scene.halo_bridge.setup=False
-ui.HBPanel.draw(layout,bpy.context)
-assert 'Folders and setup' in layout.labels
+# Background mode has no UI region; the panel wraps text to the region width.
+from types import SimpleNamespace
+context=SimpleNamespace(**{k:getattr(bpy.context,k) for k in ('scene','active_object','object','selected_objects','view_layer','window_manager','tool_settings','screen')},region=SimpleNamespace(width=340))
+ui.HBPanel.draw(layout,context)
+assert 'Folders and Setup' in layout.labels
 assert any(n=='halo_bridge.detect' and k.get('depress') for n,k in layout.ops)
 assert not any(n=='halo_bridge.copy_original' for n,k in layout.ops)
-assert 'Output level name (without .map)' in layout.labels
+assert 'Output Level Name (without .map)' in layout.labels
 print('PASS: labels, removed copy UI, always-visible setup, and mixed-scene omission guard')

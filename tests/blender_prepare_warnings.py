@@ -6,6 +6,8 @@ from unittest.mock import patch,Mock
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from halo_bridge import ui
 from halo_bridge.diagnostics import ValidationError
+# popup_menu is mocked below, so let the UI path run as it would with a window.
+ui._can_popup=lambda:True
 
 scene=SimpleNamespace(as_pointer=lambda:123)
 context=SimpleNamespace(scene=scene,window_manager=SimpleNamespace(popup_menu=Mock()))

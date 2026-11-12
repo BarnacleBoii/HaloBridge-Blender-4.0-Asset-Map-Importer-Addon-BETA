@@ -21,8 +21,16 @@ with tempfile.TemporaryDirectory() as tmp:
  before=blender_ops.mesh_signature(obj.data)
  row=vehicles.plan(bpy.context.scene,cfg)[0]
  assert row['position']==[1,2,3] and abs(row['scale']-1)<1e-5
- assert max(abs(a-b) for a,b in zip(row['rotation'],[math.degrees(.3),-math.degrees(.2),math.degrees(.1)]))<1e-4
+ # Halo yaw/pitch/roll must rebuild the object's rotation with the scenario-import convention.
+ from halo_bridge import source_formats
+ rebuilt=source_formats.euler_matrix(*row['rotation'],(0,0,0),1)
+ expected=obj.matrix_world.to_3x3().normalized()
+ assert max(abs(rebuilt[r][c]-expected[r][c]) for r in range(3) for c in range(3))<1e-5,(row['rotation'],rebuilt)
  assert obj not in geometry_export.objects(bpy.context.scene)
+ # Float32 rounding at 100x working scale (Outskirts warthogs: 99.9999924/100.0000076) is still uniform.
+ obj.scale=(100.0000076,99.9999924,100);bpy.context.view_layer.update()
+ assert abs(vehicles.plan(bpy.context.scene,cfg)[0]['scale']-1)<1e-5
+ obj.scale=(100,)*3;bpy.context.view_layer.update()
  copy=obj.copy();copy.data=obj.data;bpy.context.collection.objects.link(copy)
  rows=vehicles.plan(bpy.context.scene,cfg);assert len({r['id'] for r in rows})==2
  assert copy.data==obj.data and blender_ops.mesh_signature(obj.data)==before

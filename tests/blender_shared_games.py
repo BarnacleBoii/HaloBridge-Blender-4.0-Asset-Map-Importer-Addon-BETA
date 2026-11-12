@@ -19,6 +19,7 @@ class Layout:
     def prop(self,*args,**kw):drawn.append(('prop',args[1],kw))
     def label(self,**kw):drawn.append(('label',kw.get('text'),kw))
     def operator(self,name,**kw):drawn.append(('operator',name,kw));return SimpleNamespace()
+    def operator_menu_enum(self,name,property,**kw):return self.operator(name,**kw)
     def template_list(self,*args,**kw):drawn.append(('list',args[0],kw))
     def template_icon(self,**kw):pass
 
@@ -48,8 +49,8 @@ with tempfile.TemporaryDirectory() as folder:
     for name in ('halo_bridge.index','halo_bridge.import_map_scene'):
         assert next(row[2] for row in drawn if row[:2]==('operator',name))['depress']
     labels=[row[1] for row in drawn if row[0]=='label']
-    assert labels.index('Materials and Shaders')<labels.index('Sky (Experimental)')<labels.index('(Experimental) Sapien Map Preparation')
-    header=next(i for i,row in enumerate(drawn) if row[:2]==('label','Asset List'))
+    assert labels.index('Shaders')<labels.index('Sapien Sky (Experimental)')<labels.index('(Experimental) Sapien Map Preparation')
+    header=next(i for i,row in enumerate(drawn) if row[:2]==('label','Indexed Asset List'))
     search=next(i for i,row in enumerate(drawn) if row[:2]==('prop','search'))
     listing=next(i for i,row in enumerate(drawn) if row[0]=='list')
     assert header<search<listing

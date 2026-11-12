@@ -52,7 +52,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert not ui.preview_active(bpy.context)
     s.active_index=0;wait();assert not ui.preview_active(bpy.context)
     assert ui.config(bpy.context)['cache']==tmp
-    s.cache='';assert ui.config(bpy.context)['cache']==str(Path.home()/'Documents/HaloBridge')
+    s.cache='';assert ui.config(bpy.context)['cache']==str(catalog.default_storage())
     for cls in ui.classes:
         if issubclass(cls,bpy.types.Operator):
             assert getattr(bpy.ops.halo_bridge,cls.bl_idname.split('.')[1]).get_rna_type().description

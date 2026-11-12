@@ -5,7 +5,7 @@ from unittest.mock import patch
 import bpy
 from mathutils import Vector
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from halo_bridge import geometry_export,blender_ops
+from halo_bridge import geometry_export,blender_ops,compat
 blender_ops.ensure_exporter()
 for obj in list(bpy.context.scene.objects):bpy.data.objects.remove(obj,do_unlink=True)
 with tempfile.TemporaryDirectory() as tmp:
@@ -45,7 +45,7 @@ with tempfile.TemporaryDirectory() as tmp:
     messages=[]
     with patch.object(blender_ops,'export_scene',side_effect=inspect):geometry_export.export(cfg,root/'test.ass',progress=messages.append)
     for explicit,blend,culling,expected_sidedness in [(False,'CLIP',False,True),(False,'CLIP',True,False),(True,'OPAQUE',True,True)]:
-        material.ass_jms.two_sided=explicit;material.blend_method=blend;material.use_backface_culling=culling
+        material.ass_jms.two_sided=explicit;compat.set_alpha(material,blend.lower());material.use_backface_culling=culling
         with patch.object(blender_ops,'export_scene',side_effect=inspect):geometry_export.export(cfg,root/'test.ass')
         assert material.ass_jms.two_sided==explicit
     assert any('Preparing asset 3/3:' in message for message in messages)

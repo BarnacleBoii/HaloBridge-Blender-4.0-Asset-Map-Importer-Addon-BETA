@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory() as folder:
     for name in ('halo_bridge.index','halo_bridge.import_map_scene'):
         assert next(row[2] for row in drawn if row[:2]==('operator',name))['depress']
     labels=[row[1] for row in drawn if row[0]=='label']
-    assert labels.index('Materials and Shaders')<labels.index('Sapien Sky (Experimental)')<labels.index('(Experimental) Sapien Map Preparation')
+    assert labels.index('Shaders')<labels.index('Sapien Sky (Experimental)')<labels.index('(Experimental) Sapien Map Preparation')
     header=next(i for i,row in enumerate(drawn) if row[:2]==('label','Indexed Asset List'))
     search=next(i for i,row in enumerate(drawn) if row[:2]==('prop','search'))
     listing=next(i for i,row in enumerate(drawn) if row[0]=='list')

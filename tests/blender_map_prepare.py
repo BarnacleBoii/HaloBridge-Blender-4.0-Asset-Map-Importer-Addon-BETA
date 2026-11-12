@@ -12,6 +12,9 @@ with tempfile.TemporaryDirectory() as tmp:
     sky=Path(tmp)/'tags/levels/multi/shrine/shrine.scenario';sky.parent.mkdir(parents=True);sky.touch()
     manifest=Path(tmp)/'scene.json';catalog.write_json(manifest,{'scenario':r'levels\multi\shrine\shrine'})
     obj=bpy.context.object;obj['hb_map_reference']=True;obj['hb_map_manifest']=str(manifest)
+    # Preparation validates shaders first; give the cube a fixture Halo shader tag.
+    shader=Path(tmp)/'tags/fixture/test.shader';shader.parent.mkdir(parents=True);shader.write_bytes(b'fixture')
+    obj.data.materials.clear();mat=bpy.data.materials.new('fixture');mat['hb_shader']=r'fixture\test';obj.data.materials.append(mat)
     def export(cfg,path,progress=None):
         assert cfg['sky_scenario']==r'levels\multi\shrine\shrine'
         return []

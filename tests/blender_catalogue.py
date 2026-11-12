@@ -139,10 +139,20 @@ with tempfile.TemporaryDirectory() as tmp:
     for a in s.assets:a.checked=a.asset_id=='mat'
     bpy.ops.halo_bridge.place();wait()
     assert any(m.get('hb_asset_id')=='mat' for m in bpy.data.materials)
-    # Template creates UVs and shader nodes from the supplied material preview.
-    shell=blender_ops.starter_ground(ui.config(bpy.context),preview)
-    assert shell.data.materials[0].use_nodes and shell.data.uv_layers.active
-    assert any(p.material_index==0 for p in shell.data.polygons)
+    # Template: terrain plane with the supplied shader, a +sky wall and an unexported Master Chief.
+    chief_asset=dict(id='chief',name='masterchief',kind='model',tag='objects\\characters\\masterchief\\masterchief',section=-1)
+    made=blender_ops.starter_template(bpy.context,ui.config(bpy.context),preview,chief_asset,preview)
+    terrain,sky,chief=made['terrain'],made['sky'],made['chief']
+    assert terrain.data.materials[0].node_tree and terrain.data.uv_layers.active and len(terrain.data.polygons)==1
+    assert sorted(round(v,3) for uv in terrain.data.uv_layers.active.data for v in uv.uv)==[0.0]*4+[1.0]*4
+    assert 'hb_template_note' in terrain  # the texture-less fixture cannot become paintable terrain
+    assert sky.data.materials[0].name.startswith('+sky') and len(sky.data.polygons)==6
+    assert all((p.center.normalized().dot(p.normal))<0 for p in sky.data.polygons), 'sky wall faces inward'
+    assert chief.get('hb_ignore') and chief.name.startswith('Master Chief')
+    from halo_bridge import geometry_export
+    exported=geometry_export.objects(bpy.context.scene)
+    assert terrain in exported and chief not in exported
+    assert bpy.context.view_layer.objects.active==terrain
     # Placement now commits atomically as one undo transaction after extraction.
     s.search='';s.asset_tab='IMPORTED'
     for a in s.assets:a.checked=a.kind=='instance'

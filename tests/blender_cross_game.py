@@ -4,12 +4,12 @@ from pathlib import Path
 from unittest.mock import patch
 import bpy
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from halo_bridge import cross_game,geometry_export,blender_ops
+from halo_bridge import cross_game,geometry_export,blender_ops,compat
 blender_ops.ensure_exporter()
 for obj in list(bpy.context.scene.objects):bpy.data.objects.remove(obj,do_unlink=True)
 bpy.ops.mesh.primitive_plane_add(size=100)
 obj=bpy.context.object;obj['hb_id']='fixture';obj['hb_game']='reach';obj['hb_working_units']=100
-mat=bpy.data.materials.new('reach fixture');mat.use_nodes=True;mat.blend_method='CLIP';mat['hb_shader']='reach/only';obj.data.materials.append(mat)
+mat=bpy.data.materials.new('reach fixture');compat.enable_nodes(mat);compat.set_alpha(mat,'clip');mat['hb_shader']='reach/only';obj.data.materials.append(mat)
 bsdf=mat.node_tree.nodes.get('Principled BSDF');image=bpy.data.images.new('fixture',4,4,alpha=True)
 image.pixels[:]=[.4,.3,.2,.5]*16
 tex=mat.node_tree.nodes.new('ShaderNodeTexImage');tex.image=image

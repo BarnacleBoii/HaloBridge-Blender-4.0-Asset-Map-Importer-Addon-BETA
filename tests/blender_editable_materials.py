@@ -3,9 +3,9 @@ import sys,tempfile
 from pathlib import Path
 import bpy
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from halo_bridge import editable_materials,cross_game,export_review
+from halo_bridge import editable_materials,cross_game,export_review,compat
 bpy.ops.mesh.primitive_plane_add();obj=bpy.context.object
-base=bpy.data.materials.new('Source');base.use_nodes=True
+base=bpy.data.materials.new('Source');compat.enable_nodes(base)
 tex=base.node_tree.nodes.new('ShaderNodeTexImage');tex.image=bpy.data.images.new('white',width=4,height=4);tex.image.generated_color=(1,1,1,1)
 base.node_tree.links.new(tex.outputs['Color'],base.node_tree.nodes.get('Principled BSDF').inputs['Base Color']);obj.data.materials.append(base)
 mat=editable_materials.make(bpy.context,'terrain');mat['hb_bake_size']=512

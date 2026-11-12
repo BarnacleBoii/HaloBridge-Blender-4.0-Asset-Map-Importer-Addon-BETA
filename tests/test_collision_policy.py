@@ -12,8 +12,9 @@ class CollisionPolicyTests(unittest.TestCase):
         self.assertFalse(collision_policy.render_only(mat,'glass.shader'))
         self.assertFalse(collision_policy.render_only(mat,'tree_leafc.shader'))
         self.assertTrue(collision_policy.render_only(mat,'cit_tree_leafc.shader',r'levels\solo\100_citadel\shaders\cit_tree_leafc'))
-        mat.hb_collision_mode='SOLID';self.assertFalse(collision_policy.render_only(mat,'leaves.shader_foliage'))
-        mat.hb_collision_mode='RENDER_ONLY';self.assertTrue(collision_policy.render_only(mat,'tree_leafc.shader'))
+        # Per-material collision settings from older versions no longer change anything.
+        mat.hb_collision_mode='SOLID';self.assertTrue(collision_policy.render_only(mat,'leaves.shader_foliage'))
+        mat.hb_collision_mode='RENDER_ONLY';self.assertFalse(collision_policy.render_only(mat,'tree_leafc.shader'))
         mat.hb_collision_mode='AUTO';mat.ass_jms.render_only=True
         self.assertTrue(collision_policy.render_only(mat,'anything.shader'))
 
