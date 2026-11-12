@@ -55,6 +55,38 @@ internal sealed class ReachMapScene {
   writer.Progress("Map scene extracted: "+writer.placements.Count+" mesh placements");
  }
 
+ // Halo: CE and Halo 2: Reclaimer builds the whole scenario as a Scene (BSPs,
+ // skies and object placements), which is written in the same scene.json format.
+ internal static void ExportScene(ICacheFile cache,string game,string output) {
+  var writer=new ReachMapScene(output);
+  var tag=cache.TagIndex.GetGlobalTag("scnr");
+  writer.Progress("Reading the scenario: "+tag.TagName);
+  if(!ContentFactory.TryGetPrimaryContent(tag,out var content) || content is not IContentProvider<Scene> provider)throw new Exception("Reclaimer cannot read this scenario.");
+  var scene=provider.GetContent();
+  var categories=new Dictionary<string,string>{["scenario_structure_bsps"]="Terrain",["skies"]="Skies",["scenery"]="Scenery",["device_machines"]="Machines",["device_controls"]="Controls",["crates"]="Crates"};
+  foreach(var top in scene.ChildGroups) {
+   var category=categories.GetValueOrDefault(top.Name,top.Name);bool bsp=category=="Terrain";
+   if(bsp)writer.expectedBsps+=top.ChildObjects.Count;
+   foreach(var group in top.EnumerateHierarchy()) {
+    int number=0;
+    foreach(var item in group.ChildObjects) {
+     try {
+      if(item.Object is not Model model)continue;
+      var transform=item.Transform;
+      writer.Progress("Reading "+category+": "+model.OriginalPath);
+      writer.AddModel(model,transform,category,(model.OriginalPath??model.Name)+(bsp?"":" #"+number++),bsp);
+      if(bsp)writer.decodedBsps++;
+     } catch(Exception e) {writer.warnings.Add(category+": "+e.Message);}
+    }
+   }
+  }
+  if(writer.decodedBsps==0)throw new Exception("No terrain BSP could be decoded. "+string.Join("; ",writer.warnings));
+  writer.Save("scene.json",new{version=1,kind="halo3_map_scene",game,scenario=tag.TagName,units="halo",matrix_convention="row_vector",expected_bsps=writer.expectedBsps,decoded_bsps=writer.decodedBsps,
+   meshes=writer.meshes,placements=writer.placements,counts=writer.counts,warnings=writer.warnings.Distinct().ToArray(),
+   limitations=new[]{"Static visual layout only; not a reconstructed playable scenario.","AI, player starts, weapons, vehicles, scripts, triggers, animated device state, baked lighting and original collision are not imported.","Variant selection is approximated when multiple render permutations exist; affected assets are reported.","All BSPs are imported together."}});
+  writer.Progress("Map scene extracted: "+writer.placements.Count+" mesh placements");
+ }
+
  void AddPlacements<TTag,TPlacement>(IEnumerable<ObjectPaletteBlock>? palette,IEnumerable<TPlacement>? instances,string category)
   where TTag:ObjectTag where TPlacement:ObjectPlacementBlockBase {
   if(palette==null||instances==null)return;

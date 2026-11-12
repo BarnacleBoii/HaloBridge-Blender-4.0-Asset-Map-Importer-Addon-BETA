@@ -38,4 +38,21 @@ internal static class ReachSupport {
   Directory.CreateDirectory(output);
   File.WriteAllText(Path.Combine(output,"preview.json"),JsonSerializer.Serialize(new{version=1,materials=Program.WriteMaterials(materials,output),meshes=Array.Empty<object>()}));
  }
+ // Preview textures for a Reach Editing Kit scenario import, looked up by exact shader tag path.
+ internal static void Materials(ICacheFile cache,string[] tags,string output) {
+  var wanted=tags.Select(t=>t.Replace('/','\\')).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+  var shaders=cache.TagIndex.Where(t=>t.ClassCode.StartsWith("rm")).GroupBy(t=>t.TagName,StringComparer.OrdinalIgnoreCase).ToDictionary(g=>g.Key,g=>g.First(),StringComparer.OrdinalIgnoreCase);
+  var method=typeof(ShaderBlock).Assembly.GetType("Reclaimer.Blam.HaloReach.HaloReachCommon")!.GetMethod("GetMaterials")!;
+  var found=new Dictionary<string,object>();var missing=new List<string>();var warnings=new List<string>();
+  Directory.CreateDirectory(output);
+  foreach(var name in wanted) {
+   if(!shaders.TryGetValue(name,out var tag)){missing.Add(name);continue;}
+   try {
+    var materials=(IEnumerable<Material>)method.Invoke(null,new object[]{new[]{new ShaderBlock{ShaderReference=new TagReference(cache,tag.ClassId,tag.Id)}}})!;
+    var written=Program.WriteMaterials(materials,output,warnings);
+    if(written.Count>0)found[name]=written[0];else missing.Add(name);
+   } catch(Exception e){warnings.Add(name+": "+e.Message);missing.Add(name);}
+  }
+  File.WriteAllText(Path.Combine(output,"materials.json"),JsonSerializer.Serialize(new{version=1,materials=found,missing,warnings}));
+ }
 }

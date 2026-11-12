@@ -18,10 +18,26 @@ class Program {
    var map=job.GetProperty("map").GetString()!; var output=job.GetProperty("output").GetString()!;
    var cache=CacheFactory.ReadCacheFile(map);
    bool reach=cache.Metadata.Engine==BlamEngine.HaloReach;
-   if((cache.Metadata.Engine!=BlamEngine.Halo3 && !reach) || !cache.Metadata.IsMcc) throw new Exception("Select an MCC PC Halo 3 or Halo: Reach map.");
-   if(job.TryGetProperty("game",out var requested) && requested.GetString()!=(reach?"reach":"halo3")) throw new Exception("The map belongs to a different game. Change the Halo game selector or maps folder.");
+   // ODST uses the Halo 3 tag layouts; Reclaimer reads both with the same classes.
+   bool odst=cache.Metadata.Engine==BlamEngine.Halo3ODST;
+   bool classic=ClassicSupport.IsClassic(cache);
+   if(classic)ClassicSupport.Current=cache;
+   if(!classic && ((cache.Metadata.Engine!=BlamEngine.Halo3 && !odst && !reach) || !cache.Metadata.IsMcc)) throw new Exception("Select an MCC PC Halo: CE, Halo 2, Halo 3, Halo 3: ODST or Halo: Reach map.");
+   var game=classic?ClassicSupport.Game(cache):reach?"reach":odst?"odst":"halo3";
+   if(job.TryGetProperty("game",out var requested) && requested.GetString()!=game) throw new Exception("The map belongs to a different game ("+game+"). Change the Halo game selector or maps folder.");
    var op=job.GetProperty("operation").GetString();
-   if(new[]{"extract","material","map_scene"}.Contains(op))Save(Path.Combine(output,"texture_names.json"),new{version=1,textures=cache.TagIndex.Where(t=>t.ClassCode=="bitm").ToDictionary(t=>t.Id.ToString(),t=>t.TagName)});
+   if(op=="probe") {
+    Save(output,new{version=1,game,engine=cache.Metadata.Engine.ToString(),cache_type=cache.CacheType.ToString(),mcc=cache.Metadata.IsMcc,scenario=cache.TagIndex.GetGlobalTag("scnr")?.TagName,classes=cache.TagIndex.GroupBy(t=>t.ClassCode).ToDictionary(g=>g.Key,g=>g.Count())});
+    Console.WriteLine(JsonSerializer.Serialize(new{version=1,ok=true,output}));return 0;
+   }
+   if(classic) {
+    if(new[]{"extract","material","map_scene"}.Contains(op))Save(Path.Combine(output,"texture_names.json"),new{version=1,textures=cache.TagIndex.Where(t=>t.ClassCode=="bitm").ToDictionary(t=>t.Id.ToString(),t=>t.TagName)});
+    if(op=="index"){ClassicSupport.Index(cache,map,output);Console.WriteLine(JsonSerializer.Serialize(new{version=1,ok=true,output}));return 0;}
+    if(op=="material"){ClassicSupport.Material(cache,job.GetProperty("tag").GetString()!,output);Console.WriteLine(JsonSerializer.Serialize(new{version=1,ok=true,output}));return 0;}
+    if(op=="map_scene"){ReachMapScene.ExportScene(cache,game,output);Console.WriteLine(JsonSerializer.Serialize(new{version=1,ok=true,output}));return 0;}
+    if(op!="extract"&&op!="texture_names"&&op!="scenario_info")throw new Exception(op+" is not available for "+game+" maps.");
+   }
+   if(new[]{"extract","material","materials","map_scene"}.Contains(op))Save(Path.Combine(output,"texture_names.json"),new{version=1,textures=cache.TagIndex.Where(t=>t.ClassCode=="bitm").ToDictionary(t=>t.Id.ToString(),t=>t.TagName)});
    if(op=="texture_names") {
     Save(output,new{version=1,textures=cache.TagIndex.Where(t=>t.ClassCode=="bitm").ToDictionary(t=>t.Id.ToString(),t=>t.TagName)});
    } else if(op=="audit_variants") {
@@ -46,7 +62,7 @@ class Program {
       }
      }
     }
-    Save(output,new {version=1,map,assets});
+    Save(output,new {version=1,game=odst?"odst":"halo3",map,assets});
    } else if(op=="bsp_diagnostics") {
     var tag=cache.TagIndex.First(t=>t.TagName==job.GetProperty("tag").GetString() && t.ClassCode=="sbsp");
     var bsp=tag.ReadMetadata<ScenarioStructureBspTag>();
@@ -62,9 +78,27 @@ class Program {
     var method=typeof(ShaderBlock).Assembly.GetType("Reclaimer.Blam.Halo3.Halo3Common")!.GetMethod("GetMaterials")!;
     var materials=(IEnumerable<Material>)method.Invoke(null,new object[]{new[]{new ShaderBlock{ShaderReference=new TagReference(cache,tag.ClassId,tag.Id)}}})!;
     Save(Path.Combine(output,"preview.json"),new{version=1,materials=WriteMaterials(materials,output),meshes=Array.Empty<object>()});
+   } else if(op=="materials") {
+    // Preview textures for an Editing Kit scenario import. Shaders are looked up by
+    // their exact tag path; geometry and layout come from the kit tags, not this map.
+    if(reach){ReachSupport.Materials(cache,job.GetProperty("tags").EnumerateArray().Select(t=>t.GetString()!).ToArray(),output);Console.WriteLine(JsonSerializer.Serialize(new{version=1,ok=true,output}));return 0;}
+    var wanted=job.GetProperty("tags").EnumerateArray().Select(t=>t.GetString()!.Replace('/','\\')).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    var shaders=cache.TagIndex.Where(t=>t.ClassCode.StartsWith("rm")).GroupBy(t=>t.TagName,StringComparer.OrdinalIgnoreCase).ToDictionary(g=>g.Key,g=>g.First(),StringComparer.OrdinalIgnoreCase);
+    var method=typeof(ShaderBlock).Assembly.GetType("Reclaimer.Blam.Halo3.Halo3Common")!.GetMethod("GetMaterials")!;
+    var found=new Dictionary<string,object>();var missing=new List<string>();var warnings=new List<string>();
+    Directory.CreateDirectory(output);
+    foreach(var name in wanted) {
+     if(!shaders.TryGetValue(name,out var tag)){missing.Add(name);continue;}
+     try {
+      var materials=(IEnumerable<Material>)method.Invoke(null,new object[]{new[]{new ShaderBlock{ShaderReference=new TagReference(cache,tag.ClassId,tag.Id)}}})!;
+      var written=WriteMaterials(materials,output,warnings);
+      if(written.Count>0)found[name]=written[0];else missing.Add(name);
+     } catch(Exception e){warnings.Add(name+": "+e.Message);missing.Add(name);}
+    }
+    Save(Path.Combine(output,"materials.json"),new{version=1,materials=found,missing,warnings});
    } else if(op=="extract") {
     var tagPath=job.GetProperty("tag").GetString();int section=job.GetProperty("section").GetInt32();
-    var tag=cache.TagIndex.First(t=>t.TagName==tagPath && t.ClassCode==(section>=0?"sbsp":"mode"));
+    var tag=cache.TagIndex.First(t=>t.TagName==tagPath && t.ClassCode==(section>=0?"sbsp":classic?ClassicSupport.ModelClass(cache):"mode"));
     if(!ContentFactory.TryGetGeometryContent(tag,out var provider))throw new Exception("Reclaimer cannot decode this geometry.");
     var scene=provider.GetContent(); var model=scene.EnumerateModels().First();
     if(section>=0) {
@@ -101,6 +135,7 @@ class Program {
  internal static List<object> WriteMaterials(IEnumerable<Material> materials,string output,List<string>? warnings=null,bool strictTextures=false) {
     Directory.CreateDirectory(output);var mats=new List<object>();
     foreach(var m in materials) {
+     ClassicSupport.FillMissingDiffuse(m);
      var textures=new List<object>();
      foreach(var tm in m.TextureMappings.Where(t=>t.Texture!=null && new[]{"diffuse","normal","transparency","blend","color_change","diffuse_detail"}.Contains(t.Usage))) {
       var tex=tm.Texture;var texName="texture_"+tex.Id+".png";var full=Path.Combine(output,texName);
