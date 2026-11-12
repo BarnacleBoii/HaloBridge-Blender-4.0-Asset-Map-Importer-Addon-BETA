@@ -1,3 +1,46 @@
+# v0.10.0 verification
+
+## Windows run (Windows 11 x64, Blender 5.2.3, H3EK, .NET SDK 10.0.401, .NET Framework csc)
+
+- `source\Build.ps1` built both helpers. The tag helper compiled with the C# 5 `csc.exe` unchanged (only CS0649 warnings on JSON fields).
+- 41 Python unit tests passed (including the 4 that failed on Linux and the Windows-only test).
+- All 29 `tests/blender_*.py` passed in background mode on Blender 5.2 with toolset v364 loaded. Several older tests had stale fixtures (UI labels, sky menu mock, shader-validated fixtures, prepare-time source linking) and were updated; `blender_vehicles.py` now checks the ZYX round trip instead of the pre-fix XYZ angles.
+- Real Guardian import (`levels\multi\guardian\guardian`): 1/1 BSP from embedded ASS, 1023 objects (56 structure, 479 BSP instances, 296 special surfaces, 76 scenery, 83 crates, 20 weapons, 12 equipment, 1 sky), all 67 object render models from embedded JMS, 4 genuine warnings. Field names read as expected: `structure bsps`, the seven `<category>`/`<category> palette` blocks, `object data` position/rotation/scale (191/191), `variant name` (none set on Guardian), `default model variant` (10 objects).
+- Rotations: all 191 placements match the scenario yaw/pitch/roll to float precision, including 38 pitched or rolled ones; the export formula round-trips all of them (max matrix error 2e-5, near ±90° pitch). The pre-0.10 XYZ formula gave wrong orientations for 37 of the 38.
+- Fixed by this run: JMS names/material definitions are whole lines (all render models previously fell back to the map), lighting parameters such as `lm:5.0` in material names aborted the import, `<collection>\shaders\<name>` shader lookup, unbalanced trailing `)` in shipped weapon material names, a Blender crash showing the warnings popup in background mode, and an unregistered-property error in editable materials. The scenario cache version was bumped so 0.10.0 test caches rebuild.
+- Multi-BSP campaign import (`levels\solo\030_outskirts\030_outskirts`): 6/6 BSPs, 6298 objects including 11 vehicles, machines and controls, `variant name` read on 45 placements (368 objects carry a variant). 1012 placements (646 pitched or rolled) match the scenario rotation; 183 scenery and vehicle placements round-trip through the export planners. Remaining warnings are data issues (pathfinding and cinematic-anchor objects without render models, two empty palette slots, five materials without a matching shader in their tag).
+- Fixed by the Outskirts run: ASS strings with an embedded quote (`"%"-?bridge_cliffsupp05"`) stopped a BSP from loading; material names with `)` before their symbols (`blur)!=`) or a leading apostrophe; ambiguous shader leaves now prefer the named collection's folder; vehicle and static-export scale/shear checks use relative tolerances (float32 rounding at 100x working scale rejected 4 of 11 vehicles).
+- Toolset v364 cannot export on Blender 5.2: its operators read caller locals through a frame hack that Python 3.13 breaks. HaloBridge now detects that hack and stops before exporting with a clear message. The current release, v432 (`master-432`), copies the locals instead and works; it is no longer reported as Blender 4.0-only.
+- With toolset v432 on Blender 5.2: 41 unit tests and all 29 Blender tests passed, and Sapien preparation of the Guardian scenario import completed in 144 s (lighting off) to `levels\multi\hb_guardian_test`: structure BSP, lighting info, generated shaders, sky and 76 original scenery placements. Read back through the tag helper, all 76 placements match the source scenario (position 2e-6, rotation 4e-7, scale 2e-7). Tool reported 12 geometry warnings (overlapping surfaces on 10 instances, 2 partially untextured pieces).
+- `scripts\package.py` produced both audited ZIPs; the add-on ZIP installs and enables in a clean Blender 5.2 profile.
+
+- Windowed Blender 5.2 (not background): the sidebar threw on the Preview Mode icon (`SEQUENCE_COLOR_*` is `STRIP_COLOR_*` in Blender 5), so nothing below it was drawn, including Prepare for Sapien; the Collision list named a nonexistent UIList. Both fixed; the full panel now draws with and without a scenario import. Background tests use mock layouts and could not catch this; `tests/blender_icons.py` now checks names against the real Blender.
+
+- A user's Guardian scene failed in Tool with NaN texture coordinates. The source meshes were clean; `add_collision_geometry` added loops whose UVs Blender 5.2 leaves uninitialized, so the affected objects changed between runs. After the fix, two exports of that scene had no non-finite values and Tool compiled it in 97 s. `tests/blender_collision_uvs.py` covers it.
+
+- Multi-game round (Blender 5.2.3, H3EK, H3ODSTEK, HREK, rebuilt helpers):
+  - **ODST:** `h100.map` indexes 4,571 assets; scenery, instance, model and material extraction work; whole-map import of `h100` decodes 11/11 BSPs (16,302 placements). Scenario import of `levels\atlas\sc100\sc100`: 4/4 BSPs from embedded ASS, 5,271 objects, 397 of 471 materials textured from `sc100.map`; Index .scenario Assets lists 1,134 rows and placing one of each kind works. 4 BSP objects in Bungie's source have no material assigned (index -1) and are skipped with a note.
+  - **ODST Sapien:** preparation of 40 scenario scenery, 3 vehicles and a floor using an indexed ODST shader completed in 10 s (lighting off) to `levels\multi\hb_odst_test` in H3ODSTEK. Read back: 40 scenery, 3 vehicles, 1 player start, 1 sky, 1 BSP. Fixed by this run: ODST's player start block has no `bsp index` field.
+  - **Reach:** scenario import of `levels\multi\70_boneyard\70_boneyard` places 8,471 objects. HREK ships no source models or BSP sources, so 2 BSPs and 57 object models come from `70_boneyard.map`; the developer "hidden" BSP fails to decode, as it does in whole-map import. Index .scenario Assets lists 1,170 rows. Fixed by this run: Reach object names are string IDs.
+  - **Halo 3 regression:** Guardian scenario import unchanged (1/1 BSP, 1,023 objects, 389 index rows); the starter template still prepares in 10 s.
+  - 41 unit tests and 33 Blender tests pass (new `tests/blender_menu_changes.py`). The windowed sidebar draws with every section open; screenshots checked the boxed sections, the side-by-side tabs and the source filter.
+
+**Still not verified:** opening the prepared level in Sapien and comparing it visually, Sapien preparation of a multi-BSP campaign scenario, and preparation with lighting enabled. Blender 4.x is no longer a test target.
+
+## Linux run
+
+Run on Linux without Windows, Blender, H3EK or game files:
+
+- 39 Python unit tests ran: 34 passed, 1 skipped (Windows-only) and 4 failed. The 4 failures (`test_copy_level`, two `test_map_export` and `test_progress`) also fail on unchanged v0.9.1 code there: they depend on Windows path and process behavior.
+- New `tests/test_scenario_scene.py` (11 tests): ASS/JMS parsing, instance transform composition, BM_FLAGS and name-symbol flags, variant and LOD selection, Halo yaw/pitch/roll against Reclaimer's quaternion order, checksum rejection, shader resolution through BSP references and shader collections, and the full extract → manifest → texture merge → cache reuse flow with a mocked helper.
+
+**Not yet verified, needs a Windows run before release:**
+
+- The C# helpers were not compiled here. Build them with `source\Build.ps1` (the tag helper uses the .NET Framework C# 5 compiler).
+- `tests/blender_scenario_scene.py` and the existing Blender tests have not been run on Blender 4.0 or 5.2.
+- No real H3EK scenario has been imported yet. First check: Guardian or High Ground, then a campaign level with several BSPs. Confirm the scenario field names (`structure bsps`, palettes, `object data`, `variant name`, `default model variant`) read as expected, and that placement rotations match Sapien.
+- Sapien preparation with original scenery placements from a scenario import.
+
 # v0.9.1 verification
 
 Release checks passed for all 28 Python tests, both audited ZIP archives, local documentation links, and shader-picker/panel checks against the extracted installer.

@@ -8,8 +8,10 @@ Corresponding Core and Blam sources and their license are in `source/Reclaimer`;
 
 System.Drawing.Common 10.0.9 is a build dependency supplied through NuGet. Its runtime implementation is supplied by the user's installed Windows Desktop Runtime; no Microsoft runtime DLLs are bundled in the release. Rebuilding requires access to NuGet packages.
 
-The Halo Asset Blender Development Toolset is an external dependency by General-101 and contributors: https://github.com/General-101/Halo-Asset-Blender-Development-Toolset . It is not redistributed. The tested adapter supports v364 and v432.
+The Halo Asset Blender Development Toolset is an external dependency by General-101 and contributors: https://github.com/General-101/Halo-Asset-Blender-Development-Toolset . It is not redistributed. The adapter supports v364 and v432 on Blender 4.0, and v432 or newer releases that provide the same ASS export options on Blender 4.1 to 5.2 (v432 verified on 5.2; v364 cannot export on Python 3.13). HaloBridge's ASS/JMS readers (`halo_bridge/source_formats.py`) are independent code; their file layouts were checked against this toolset's MIT-licensed readers.
 
 Halo assets, the Halo 3 Editing Kit, ManagedBlam, and MCC map files are external user-supplied dependencies. None are included in the public add-on or source archives. The code license does not apply to game content.
 
 The v0.9.1 Reclaimer integration also retains named shader parameters/options and recognizes additional detail-map slots for preview construction. HaloBridge's regular preview implements supported albedo blending using Blender nodes. Halo 3 shader parameter behavior is documented in Microsoft's [Albedo Properties](https://learn.microsoft.com/en-us/halo-master-chief-collection/h3/shaders/albedo).
+
+Editing Kit scenario field names and the yaw/pitch/roll convention were cross-checked against Foundry by ILoveAGoodCrisp and contributors (GPL-3.0): https://github.com/ILoveAGoodCrisp/Foundry . No Foundry code is included.

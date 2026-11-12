@@ -1,69 +1,59 @@
-# HaloBridge v0.9.1 — Public early release
+# HaloBridge v0.10.0 — Editing Kit scenario import and Blender 5.2
 
-Import Halo 3 and experimental Halo: Reach assets into Blender 4.0 and prepare custom geometry for Halo 3 Sapien.
+Import levels and assets from Halo: CE, Halo 2, Halo 3, Halo 3: ODST and Halo: Reach in Blender 4.0 to 5.2, straight from Editing Kit `.scenario` tags or MCC `.map` files, and prepare a Halo 3 or ODST Sapien test level that mixes assets (and skies) from all of them.
 
 ## Downloads
 
-- **HaloBridge-0.9.1.zip** is the Blender installer, including compiled helpers.
-- **HaloBridge-0.9.1-source.zip** contains the matching source for developers.
+- **HaloBridge-0.10.0.zip** is the Blender installer, including compiled helpers.
+- **HaloBridge-0.10.0-source.zip** contains the matching source for developers.
 
-Expand Assets below to download the installer. GitHub's automatic source archives omit compiled helpers. This release has its own v0.9.1 tag matching the published source commit.
+Expand Assets below to download the installer. GitHub's automatic source archives omit compiled helpers.
+
+## What's new
+
+- **Import level from .scenario (Halo 3).** HaloBridge now reads a level from your extracted H3EK tags instead of reconstructing it from compiled `.map` data. BSP geometry comes from the source files stored in the BSP tags, with original instance names and transforms; every scenery, crate, machine, control and vehicle placement comes from the scenario with its variant; each surface gets its real shader tag and source flags. The matching `.map` only supplies preview textures, looked up by exact shader path.
+- **Original scenery stays scenery.** When you prepare a scenario import for Sapien, unedited scenery is written as placements of its own scenery tag, keeping its collision and physics. Vehicles keep their vehicle tags. Edited objects export as static geometry.
+- **Halo 3: ODST** is a full game: index and import its `.map` files, import levels from the H3ODSTEK `.scenario`, and prepare ODST Sapien levels.
+- **Halo: CE and Halo 2** import from MCC `.map` files, and from their Editing Kit `.scenario` tags (HCEEK / H2EK; the kit's own Tool builds the map first).
+- **Halo: Reach `.scenario` import** places objects from the HREK scenario (geometry comes from the matching `.map`).
+- **Every game in one level.** Assets from any import game can be prepared together in a Halo 3 Sapien level; their shaders are converted automatically.
+- **Skies from any game.** **Sapien Sky** has a **Game** choice: use a Halo 3 kit sky, or convert a Halo: CE, Halo 2, ODST or Reach sky into your level.
+- **Index .scenario Assets** and a source filter (All / .map / .scenario) in the asset list.
+- **Blender 5.2 support.** Runs on Blender 4.0 through 5.2. On 4.1 and newer, use the current Halo Asset Blender Development Toolset release.
+- **Detect folders** finds Editing Kits and MCC in every Steam library and Xbox app / PC Game Pass installs, and storage follows a Documents folder moved by OneDrive.
+- **Sidebar:** collapsible sections, **(Default) Automatic** object collision (the per-material Collision control is gone), output level name starts as `levelname123`, and **Remove Grey Blender Fog** sets 0.1 m / 999999 m.
+- **Fixes:** vehicles and invisible blocks with pitch or roll were rotated incorrectly on export; Halo: CE / Halo 2 textures that imported white; Tool collision rejections are retried automatically.
+
+See the [changelog](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/CHANGELOG.md) for every change.
 
 ## Requirements
 
 | Component | Required version / purpose |
 | --- | --- |
 | [Windows](https://www.microsoft.com/windows/) | 64-bit Windows |
-| [Blender 4.0](https://download.blender.org/release/Blender4.0/) | Blender **4.0**; this build does not support newer Blender versions |
-| [Halo: The Master Chief Collection](https://store.steampowered.com/app/976730/Halo_The_Master_Chief_Collection/) | Install Halo 3 and/or Reach content and retain the complete maps folder, including shared resource maps |
-| [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | **v364 or v432**, installed and enabled; provides Halo Blender properties and ASS export. Current individual asset placement also checks it |
-| [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) | **10, Windows x64 Desktop Runtime**, for extraction; not just the base runtime |
-| [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8+**, for the Editing Kit/tag helper |
-| [Halo 3 Mod Tools / H3EK](https://store.steampowered.com/app/1695791/Halo_3_Mod_Tools__MCC/) | Required for Halo 3 Sapien preparation and current individual Halo 3 BSP-instance placement; extract the supplied kit archives and retain the required tags |
-
-**Only importing into Blender?** Indexing, model/material extraction and whole-map visual extraction read MCC maps. They do not inherently require extracted Editing Kit tags. **Individual Halo 3 BSP-instance placement is an exception:** it currently requests collision data from H3EK tags. The setup checker checks full-workflow prerequisites even for import-only users.
-
-**Using Reach assets?** Reach extraction reads MCC Reach maps, not extracted HREK tags, although the current setup checker checks the Reach kit installation. Preparing Reach assets for Halo 3 uses **H3EK**, not Reach Sapien. Halo 3 remains the only implemented Sapien destination.
-
-See the [detailed requirements and component explanations](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/INSTALLATION.md#requirements).
+| [Blender](https://www.blender.org/download/) | **4.0 to 5.2** (5.2 recommended) |
+| [Halo 3 Mod Tools / H3EK](https://store.steampowered.com/app/1695791/Halo_3_Mod_Tools__MCC/) | Extract the supplied tag archives. Required for Halo 3 scenario import and Halo 3 Sapien preparation. Other games' kits (H3ODSTEK, HREK, HCEEK, H2EK) are needed only for their own `.scenario` import / ODST preparation |
+| [Halo: The Master Chief Collection](https://store.steampowered.com/app/976730/Halo_The_Master_Chief_Collection/) | Steam or Xbox app / PC Game Pass, with the games you import from installed. Supplies preview textures, the asset browser and `.map` imports |
+| [Halo Asset Blender Development Toolset](https://github.com/General-101/Halo-Asset-Blender-Development-Toolset) | Blender 4.1–5.2: v432 or newer. Blender 4.0: v364 or v432. Provides Halo Blender properties and ASS export |
+| [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) | **10, Windows x64 Desktop Runtime**, for map extraction |
+| [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8+**, for the Editing Kit tag helper |
 
 ## How to Install
 
-1. Install Blender 4.0 and the required runtimes above.
-2. Install and enable the **Halo Asset Blender Development Toolset v364 or v432** in Blender.
-3. Download **HaloBridge-0.9.1.zip** from this release's Assets.
-4. In Blender, open **Edit → Preferences → Add-ons → Install**, select the ZIP without extracting it, and enable **HaloBridge - Blender 4.0 Importing**.
+1. Install Blender and the runtimes above.
+2. Install and enable the **Halo Asset Blender Development Toolset** (v432 or newer; v364 also works on Blender 4.0).
+3. Download **HaloBridge-0.10.0.zip** from this release's Assets.
+4. In Blender, open **Edit → Preferences → Add-ons**, use the drop-down at the top right → **Install from Disk…** (on 4.0/4.1: **Install**), select the ZIP without extracting it, and enable **HaloBridge - Halo Level Importing**.
 5. In the 3D View, press **N** and open **HaloBridge**.
-6. Choose **Import game**, then use **Folders and Setup → Detect folders** or enter the correct paths. The maps path is MCC's game maps folder; the Editing Kit path is the kit root containing its executables.
-7. Run **Check setup** and read any issues in the context of your chosen workflow. Use **Choose .map file** to pick or type a filename.
-8. Click **Index Map Assets** to browse individual assets, or **Import entire .map** for the available static layout. Use Material Preview to view textures.
+6. Choose an **Import game**, then use **Folders and Setup → Detect folders** (it finds Steam libraries on any drive and Xbox app / Game Pass installs) or enter the Editing Kit and maps paths, then run **Check setup**.
+7. **A whole level:** choose a scenario and click **Import level from .scenario (Recommended)**, or choose a `.map` and click **Import entire .map**. **Individual assets:** click **Index .map Assets** or **Index .scenario Assets**, then preview and place from the **Indexed Asset List**. Use Material Preview to view textures.
 
-For Sapien, configure H3EK with extracted tags under **Folders and Setup** while Halo 3 is selected. Preparation reuses that path even when browsing Reach. Save your scene and close Sapien before building.
+**Updating:** save your work, finish or cancel jobs, remove/disable the old add-on in Preferences, restart Blender, and install the new ZIP. Keep your cache, project manifests and backups.
 
-**Updating:** save your work, finish or cancel jobs, remove/disable the old add-on in Preferences, restart Blender, and install the refreshed ZIP. Keep your cache, project manifests and backups. Restart Blender if the old interface remains visible.
-
-[Full installation guide](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/INSTALLATION.md) · [Blender-only importing](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/IMPORTING.md) · [First Sapien test map](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/FIRST-MAP.md)
-
-## Changes in v0.9.1
-
-- **Original collision first.** Automatic collision tries verified source collision geometry for eligible imported models and BSP instances. Edited or unmatched objects use the available box or surface fallback. Preparation reports list the collision route for each exported static object.
-- **Large static models.** Oversized instances can export as several aligned Halo instances while staying one editable Blender object. This addresses the Reach Elite render-index overflow while retaining its visible triangles.
-- **Paintable terrain.** Supported layered terrain starts with the original blended appearance. Numbered shader-layer buttons paint an overlay, and Paint original blend restores the source mixture. Texture resolution has 512, 1024, 2048 and 4096 options. Repeat controls start collapsed.
-- **Original vehicle paint.** Editable colors can generate level-local vehicle/model/render-model copies for matched Halo 3 vehicles, with the original gameplay and physics references retained.
-- **Snowbound materials.** Halo 3 previews now support default, detail blend, two-detail and two-detail-overlay albedo operations when their parameters are available. The missing second detail texture is extracted, restoring Snowbound's purple icy-metal layer.
-- **Paired transparent faces.** Imported meshes whose transparent triangles all have opposite-facing mates get a local material with backface culling, reducing overlapping front/back rendering. This preserves the mesh faces.
-- **Shader controls.** Materials and Shaders identifies the active object/material. Assign shader to active material explains its Sapien effect. The picker captures its chosen category, shows the matching count, and keeps manual path entry. Collision controls have their own section.
-- **Texture-loading label.** The button is now Load Halo Shader Textures/Masks for Currently selected Material.
-- **Neutral normal fallback.** The known unreadable default_vector placeholder can use a flat normal instead of interrupting extraction for that specific decode error.
-
-## Using the new material controls
-
-Select a mesh and its active material. Materials and Shaders shows the target. Scan existing shaders, choose a category, and use the filtered shader picker. Assign shader to active material sets the Sapien reference. Use Load Halo Shader Textures/Masks for Currently selected Material to refresh the Blender textures.
-
-For painting, start from the original material and follow the [editable-material guide](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/EDITABLE-MATERIALS.md). Existing painted copies keep their own stored images and mask interpretation. Pack images and save before updating.
+[Full installation guide](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/INSTALLATION.md) · [Importing guide](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/IMPORTING.md) · [First Sapien test map](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/FIRST-MAP.md)
 
 ## Known limits
 
-Sapien preparation remains experimental and targets Halo 3. Original collision reuse requires a matching source and available tags. Edited or unmatched assets can use fallback collision. Large terrain and clusters still have compiler limits. Preview shaders approximate engine rendering, and this release does not establish universal map conversion or multiplayer compatibility.
+Halo 3 / ODST scenario import needs the source files stored in kit tags; a BSP without them is reported and skipped. Reach Sapien preparation is not available. Converted skies from other games carry no sky lighting (test lighting uses the destination kit's sky), and Halo: CE cloud tints are not converted. Weapons and equipment are reference-only; AI, scripts, decals, lighting and zone sets are not imported. Sapien preparation remains experimental and builds a new level from current meshes plus original scenery and vehicle placements. Preview shaders approximate engine rendering. See [limits](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/LIMITATIONS.md).
 
-[Feature index and detailed instructions](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/FEATURES.md) · [Troubleshooting](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/TROUBLESHOOTING.md) · [Report a problem](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/issues/new/choose)
+[Feature index](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/FEATURES.md) · [Troubleshooting](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/blob/main/docs/TROUBLESHOOTING.md) · [Report a problem](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/issues/new/choose)

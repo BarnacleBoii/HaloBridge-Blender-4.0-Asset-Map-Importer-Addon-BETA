@@ -1,39 +1,48 @@
 # Contributing
 
-Keep changes focused and explain the problem, resulting behavior, and validation. Do not commit game data, extracted assets, private paths, diagnostics, or project caches. The repository's public tests generate synthetic fixtures.
+Thanks for helping. Keep changes focused, and in your pull request explain the problem, what changes, and how you tested it. See [How HaloBridge works](docs/HOW-IT-WORKS.md) for an overview of the code.
+
+**Never commit game content:** maps, tags, extracted meshes or textures, caches, `.blend` files with game data, diagnostic logs, or anything containing your personal folder paths. Tests use synthetic data only.
 
 ## Build on Windows x64
 
-Install .NET SDK 10, .NET Framework 4.8 (including its C# compiler), and the Halo 3 Editing Kit. Use your own kit path:
+You need the .NET 10 SDK, .NET Framework 4.8 (which includes its C# compiler), and a Halo 3 Editing Kit. Use your own kit path:
 
 ```powershell
 .\source\Build.ps1 -EditingKit 'D:\Games\H3EK'
 python .\scripts\package.py
 ```
 
-The build reads `bin/ManagedBlam.dll` from the kit as a reference but does not copy it. Release helpers go into `halo_bridge/bin`. The source tree includes the modified Reclaimer sources; no separate checkout is required. NuGet restore requires network access unless packages are already cached.
+- `Build.ps1` builds the extraction helper with `dotnet build` and the tag helper with the .NET Framework `csc.exe`. It references the kit's `bin\ManagedBlam.dll` but never copies it. Both helpers go into `halo_bridge\bin`.
+- The source tree includes the modified Reclaimer sources; no separate checkout is needed. NuGet restore needs network access unless packages are cached.
+- Builds are deterministic and strip local paths (`source\Directory.Build.props`).
+- `package.py` writes the add-on ZIP and the matching source ZIP to `dist\`. It only includes approved helper files and refuses game data and files containing your home folder path. Always publish both ZIPs together.
 
-The packager emits the Blender add-on ZIP and matching source ZIP in `dist/`. It only packages approved helper files and rejects game data and personal build paths. Always distribute both ZIPs together. Never package the repository's parent directory or a local demo project.
+The tag helper is compiled by the .NET Framework `csc.exe`, which only accepts C# 5: no `?.`, `$""` strings, `out var` or expression-bodied members in `source/TagBridge/Program.cs`.
 
 ## Tests
 
 ```powershell
-python -m unittest discover -s tests -p 'test_*.py' -v
-blender --background --factory-startup --python-exit-code 1 --python tests/blender_smoke.py
-blender --background --factory-startup --python-exit-code 1 --python tests/blender_catalogue.py
-blender --background --factory-startup --python-exit-code 1 --python tests/blender_map_scene.py
+python -m unittest discover -s tests -p "test_*.py"
+blender --background --factory-startup --python-exit-code 1 --python tests\blender_smoke.py
 ```
 
-The Blender smoke test uses a synthetic triangle and material; it replaces the external extractor/exporter checks for this UI-only test. It does not validate ASS output or the game toolchain. Perform a separate local compile and Sapien check with your own game files when changing export or scenario logic.
+Run every `tests\blender_*.py` file the same way, on both the oldest (4.0) and newest (5.2) supported Blender. Each prints `PASS` when it succeeds. Put Blender version differences in `halo_bridge/compat.py`.
 
-Do not submit game-derived fixtures. Record tool versions and a short result summary instead. See TESTING.md for the current release's verification scope.
+The Blender tests use synthetic meshes and materials and stub out the helpers, so they don't validate ASS output or the game toolchain. When you change export, collision or scenario logic, also do a real local build with your own game files and open the result in Sapien. Record tool versions and a short result in your pull request; don't attach game-derived files.
 
-## v0.9 shared game framework
+Useful tests by area:
 
-`halo_bridge/games.py` is the capability registry and destination resolver. Keep import profiles separate from export settings; don't duplicate the sidebar for new games. Adding a registry label is not game support: implement and validate extraction/material/conversion adapters first. Preserve explicit failure reporting for unavailable destinations.
+| Area | Tests |
+| --- | --- |
+| Games, profiles, mixed-game export | `blender_all_games.py`, `blender_shared_games.py`, `blender_cross_game.py`, `blender_multi_swap.py` |
+| `.scenario` import | `blender_scenario_scene.py`, `test_scenario_scene.py` |
+| Whole-map import | `blender_map_scene.py`, `blender_map_prepare.py` |
+| Sidebar | `blender_activity_ui.py`, `blender_menu_changes.py`, `blender_icons.py` |
+| Shaders and materials | `blender_shader_choices.py`, `blender_editable_materials.py`, `blender_editable_layers.py` |
+| Collision | `test_collision_policy.py`, `blender_collision_uvs.py` |
+| Folder detection, packaging | `test_public.py` |
 
-Run `tests/blender_shared_games.py`, `tests/blender_multi_swap.py`, `tests/blender_cross_game.py`, and `tests/blender_current_geometry.py` for changes in those areas. Tests requiring game tools are separate from UI/synthetic tests. Keep documentation's requirements matrix aligned with actual helper calls and setup-check behavior.
+## Adding a game
 
-## v0.9.1 regression areas
-
-Run tests/blender_shader_choices.py for filtered shader search and active-material assignment, and tests/blender_activity_ui.py for panel drawing. Changes to original collision, temporary instance partitioning and editable materials should cover source identity, transforms, shared materials and preservation of scene geometry. Game-derived fixtures stay local and must be excluded from commits and packages.
+`halo_bridge/games.py` is the list of games and what each supports. Import settings (which maps and kit to read) are kept separate from export settings (which kit to build into); don't duplicate the sidebar for a new game. Adding an entry isn't game support: implement and test extraction, material and conversion first, and keep clear error messages for anything not available. Keep the requirements table in [Installation](docs/INSTALLATION.md#what-each-task-needs) in line with what the code actually calls.
