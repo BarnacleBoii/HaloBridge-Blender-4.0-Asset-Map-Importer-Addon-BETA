@@ -7,9 +7,8 @@ from pathlib import Path
 VERIFIED_LEAF_TAGS={r'levels\solo\100_citadel\shaders\cit_tree_leafc'}
 
 def render_only(material,shader_source=None,shader_tag=''):
-    mode=getattr(material,'hb_collision_mode','AUTO')
-    if mode=='SOLID':return False
-    if mode=='RENDER_ONLY':return True
+    # The per-material Collision setting was removed from the sidebar; values saved by
+    # older versions (hb_collision_mode) are ignored so nothing hidden changes collision.
     # A generic transparent shader can be glass, so alpha alone is not enough.
     return bool(material.ass_jms.render_only or
                 (shader_source and shader_tag.replace('/','\\').lower() in VERIFIED_LEAF_TAGS) or

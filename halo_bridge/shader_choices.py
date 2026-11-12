@@ -17,7 +17,8 @@ def group(path):
 def level_items(settings,context):
     return _cache.get(games.destination(settings).kit,{}).get('levels',_empty_levels)
 def items(settings,context):
-    return filtered_items(games.destination(settings).kit,getattr(settings,'shader_level','ALL'))
+    # The sidebar no longer filters by level; the search popup covers every shader.
+    return filtered_items(games.destination(settings).kit,'ALL')
 
 def filtered_items(kit,category):
     data=_cache.get(kit)

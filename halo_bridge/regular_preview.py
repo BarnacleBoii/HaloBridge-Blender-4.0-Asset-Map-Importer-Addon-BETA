@@ -1,6 +1,7 @@
 """Preview supported Halo albedo operations using their named texture parameters."""
 from pathlib import Path
 import bpy
+from . import compat
 
 
 def apply(mat, meta, directory):
@@ -76,7 +77,7 @@ def paired_transparency(mesh):
         if face.material_index >= len(mesh.materials):
             continue
         mat = mesh.materials[face.material_index]
-        if not mat or mat.blend_method == 'OPAQUE':
+        if not mat or not compat.is_transparent(mat):
             continue
         key = tuple(sorted(tuple(mesh.vertices[i].co) for i in face.vertices))
         slots[face.material_index][key].append(face.normal.copy())

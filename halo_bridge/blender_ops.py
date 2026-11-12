@@ -7,19 +7,53 @@ from pathlib import Path
 import bpy
 from mathutils import Matrix, Vector
 from .catalog import material_name, read_json, stable_id
+from . import compat
 from .source_names import leaf,generated_material
 
 def new_id(): return 'hb_'+uuid.uuid4().hex[:24]
 
+# Exporter options and material flags this adapter relies on. Builds that
+# still provide them export compatible ASS files (vertices scaled, instance
+# translations unscaled), which the export transforms below compensate for.
+EXPORT_OPTIONS=('game_title','scale_enum','hidden_geo','nonrender_geo','apply_modifiers','triangulate_faces','edge_split','clean_normalize_weights')
+MATERIAL_FLAGS=('name_override','is_bm','render_only','collision_only','two_sided','transparent_1_sided','transparent_2_sided','precise')
+LEGACY_TOOLSETS=((2,364,0),(2,432,0))
+
 def ensure_exporter():
     import addon_utils
-    if 'io_scene_halo' not in bpy.context.preferences.addons:
+    if not compat.toolset_addon_name():
         addon_utils.enable('io_scene_halo',default_set=True)
-    if 'io_scene_halo' not in bpy.context.preferences.addons:
-        raise RuntimeError('Install and enable Halo Asset Blender Development Toolset for Blender 4.0.')
-    import io_scene_halo
-    if tuple(io_scene_halo.bl_info['version']) not in ((2,364,0),(2,432,0)):
-        raise RuntimeError('Use Halo Asset Blender Development Toolset v364 (2.364.0) or v432 (2.432.0). Other exporter versions have not been verified with this adapter.')
+    if not compat.toolset_addon_name():
+        raise RuntimeError('Install and enable the Halo Asset Blender Development Toolset (General-101). Use v432 or newer (Blender 4.0 can also use v364).')
+    module=compat.toolset_module()
+    version=tuple(module.bl_info.get('version',())) if module else ()
+    if bpy.app.version<(4,1,0):
+        if version not in LEGACY_TOOLSETS:
+            raise RuntimeError('On Blender 4.0, use Halo Asset Blender Development Toolset v364 (2.364.0) or v432 (2.432.0).')
+        return
+    # Newer Blender: check the interface this adapter uses instead of a version number.
+    try:
+        options=set(bpy.ops.export_scene.ass.get_rna_type().properties.keys())
+    except (AttributeError,KeyError,RuntimeError):
+        options=set()
+    missing=[name for name in EXPORT_OPTIONS if name not in options]
+    group=getattr(bpy.types.Material,'bl_rna',None)
+    material_props=bpy.types.Material.bl_rna.properties.get('ass_jms') if group else None
+    if material_props is not None:
+        flags=set(material_props.fixed_type.properties.keys())
+        missing+=[name for name in MATERIAL_FLAGS if name not in flags]
+    else:missing.append('material ass_jms properties')
+    if missing:
+        raise RuntimeError('The installed Halo toolset does not provide the ASS export options HaloBridge uses ('+', '.join(missing)+'). Install the current General-101 toolset release.')
+
+def legacy_toolset_check():
+    """Older toolsets (v364) run operators through a frame-locals hack that Python 3.13
+    (Blender 5.x) no longer supports: the ASS export fails with a KeyError. v432 fixed it."""
+    if compat.toolset_frame_hack() and sys.version_info>=(3,13):
+        module=compat.toolset_module()
+        version='.'.join(map(str,module.bl_info.get('version',()))) if module else ''
+        raise RuntimeError('Halo Asset Blender Development Toolset '+version+' cannot export on Blender '
+                           +'.'.join(map(str,bpy.app.version[:2]))+' (Python 3.13). Install the current General-101 toolset release (v432 or newer) and prepare again.')
 
 _material_lookup={}
 _material_count=-1
@@ -45,7 +79,7 @@ def material(meta, directory):
     m['hb_material_key']=key;m['hb_conversion_id']=key
     _material_lookup[key]=m.name;_material_count=len(bpy.data.materials)
     m['hb_texture_sources']=json.dumps(meta.get('textures',[]));m['hb_texture_directory']=str(directory)
-    m['hb_shader']=meta.get('shader','');m['hb_label']=meta['name'];m.use_nodes=True
+    m['hb_shader']=meta.get('shader','');m['hb_label']=meta['name'];compat.enable_nodes(m)
     nodes=m.node_tree.nodes;links=m.node_tree.links;bsdf=nodes.get('Principled BSDF')
     texture_names=read_json(Path(directory)/'texture_names.json',{}).get('textures',{})
     for tm in meta['textures']:
@@ -81,8 +115,29 @@ def material(meta, directory):
     from . import regular_preview
     regular_preview.apply(m,meta,directory)
     if meta['alpha']!='opaque':
-        m.blend_method='CLIP' if meta['alpha']=='clip' else 'BLEND';m.use_backface_culling=False
+        compat.set_alpha(m,'clip' if meta['alpha']=='clip' else 'blend');m.use_backface_culling=False
     return m
+
+def add_material(obj, mat):
+    """Add mat as a new slot (or reuse its slot) and assign it, keeping every existing material.
+
+    In Edit Mode only the selected faces are assigned; otherwise the whole object is.
+    """
+    if obj.data.users>1:obj.data=obj.data.copy()
+    mesh=obj.data
+    index=next((i for i,m in enumerate(mesh.materials) if m==mat),None)
+    if index is None:
+        mesh.materials.append(mat);index=len(mesh.materials)-1
+    if obj.mode=='EDIT':
+        import bmesh
+        bm=bmesh.from_edit_mesh(mesh)
+        faces=[f for f in bm.faces if f.select] or list(bm.faces)
+        for face in faces:face.material_index=index
+        bmesh.update_edit_mesh(mesh)
+    else:
+        for poly in mesh.polygons:poly.material_index=index
+    obj.active_material_index=index
+    return index
 
 def mesh_from_preview(preview, asset_id, data=None):
     directory=Path(preview).parent;data=read_json(preview) if data is None else data
@@ -98,7 +153,7 @@ def mesh_from_preview(preview, asset_id, data=None):
     for poly,mi in zip(mesh.polygons,face_mats):poly.material_index=mi;poly.use_smooth=True
     uv=mesh.uv_layers.new(name='UVMap')
     for loop in mesh.loops:uv.data[loop.index].uv=uvs[loop.vertex_index]
-    mesh.use_auto_smooth=True;mesh.normals_split_custom_set_from_vertices(normals)
+    compat.custom_normals(mesh,normals)
     from . import regular_preview
     regular_preview.paired_transparency(mesh)
     mesh['hb_asset_id']=asset_id;return mesh
@@ -142,8 +197,11 @@ def import_legacy(path,key):
     else:
         # Reclaimer's legacy JMS exports can refer to node zero with an empty
         # node table. The static environment route needs no skeleton.
-        from io_scene_halo.file_jms.format import JMSAsset
-        from io_scene_halo.file_jms.process_file_retail import process_file_retail
+        toolset=compat.toolset_module()
+        if toolset is None:raise RuntimeError('Enable the Halo Asset Blender Development Toolset to import legacy JMS files.')
+        import importlib
+        JMSAsset=importlib.import_module(toolset.__name__+'.file_jms.format').JMSAsset
+        process_file_retail=importlib.import_module(toolset.__name__+'.file_jms.process_file_retail').process_file_retail
         data=process_file_retail(JMSAsset(str(path)),'halo3','JMS',tuple(range(8197,8214)),'default','default')
         mesh=bpy.data.meshes.new(Path(path).stem)
         mesh.from_pydata([v.translation*.01 for v in data.vertices],[],[(t.v0,t.v1,t.v2) for t in data.triangles]);mesh.update()
@@ -174,11 +232,23 @@ def import_legacy(path,key):
     return mesh
 
 def mesh_signature(mesh):
-    import hashlib,struct
+    """SHA-256 of vertex positions and face vertex order (unchanged digest, bulk-read)."""
+    import hashlib
     h=hashlib.sha256()
-    for v in mesh.vertices:h.update(struct.pack('<fff',*v.co))
-    for p in mesh.polygons:h.update(struct.pack('<'+'I'*len(p.vertices),*p.vertices))
-    return h.hexdigest()
+    try:
+        import numpy as np
+        co=np.empty(len(mesh.vertices)*3,dtype='<f4');mesh.vertices.foreach_get('co',co);h.update(co.tobytes())
+        # Face corners are stored contiguously in face order, as p.vertices lists them.
+        starts=np.empty(len(mesh.polygons),dtype=np.int64);mesh.polygons.foreach_get('loop_start',starts)
+        loops=np.empty(len(mesh.loops),dtype='<u4');mesh.loops.foreach_get('vertex_index',loops)
+        if len(starts) and (np.any(np.diff(starts)<0) or starts[0]!=0):raise ValueError('non-contiguous faces')
+        h.update(loops.tobytes());return h.hexdigest()
+    except (ImportError,ValueError,TypeError):
+        import struct
+        h=hashlib.sha256()
+        for v in mesh.vertices:h.update(struct.pack('<fff',*v.co))
+        for p in mesh.polygons:h.update(struct.pack('<'+'I'*len(p.vertices),*p.vertices))
+        return h.hexdigest()
 
 def collision_issue(obj):
     if not obj.get('hb_id') or obj.get('hb_ignore') or obj.get('hb_kind')=='scenery':return ''
@@ -230,9 +300,10 @@ def export_scene(config,path):
             if obj['hb_id'] in seen:obj['hb_id']=new_id()
             seen.add(obj['hb_id'])
             loc,rot,scale=obj.matrix_world.decompose()
-            if min(scale)<=0 or max(scale)-min(scale)>1e-5:issues.append(obj.name+': use positive uniform scale.')
+            # Relative tolerances: at 100x working scale float32 rounding alone is ~1e-5.
+            if min(scale)<=0 or max(scale)-min(scale)>1e-4*max(scale):issues.append(obj.name+': use positive uniform scale.')
             reconstructed=Matrix.LocRotScale(loc,rot,scale)
-            if max(abs(obj.matrix_world[r][c]-reconstructed[r][c]) for r in range(4) for c in range(4))>1e-5:
+            if max(abs(obj.matrix_world[r][c]-reconstructed[r][c]) for r in range(4) for c in range(4))>1e-5*max(1.0,max(scale)):
                 issues.append(obj.name+': parent transforms introduce shear; clear the shear before export.')
             if obj.modifiers or mesh_signature(obj.data)!=obj.get('hb_mesh_signature'):issues.append(obj.name+': mesh edits are outside version-one support.')
             if obj.get('hb_kind')=='scenery':
@@ -283,6 +354,9 @@ def export_scene(config,path):
             # exporter scales vertices but leaves instance translations alone.
             new.matrix_world.translation=obj.matrix_world.translation*(100/units)
         temp.unit_settings.scale_length=3.048
+        legacy_toolset_check()
+        from .geometry_export import repair_texcoords
+        repair_texcoords(temp.objects)  # Tool rejects the whole ASS for one NaN texture coordinate.
         bpy.ops.export_scene.ass(filepath=str(path),game_title='halo3',scale_enum='1',hidden_geo=False,nonrender_geo=False,apply_modifiers=True,triangulate_faces=True,edge_split=False,clean_normalize_weights=False)
         if not Path(path).is_file():raise RuntimeError('Exporter did not produce a level file.')
     finally:
@@ -293,29 +367,65 @@ def export_scene(config,path):
         for mat in mat_cache.values():bpy.data.materials.remove(mat)
     return placements
 
-def starter_ground(config,preview=None):
+# Starter template sizes in 100x working units: an 81 m terrain inside a 131 m x 52 m sky wall.
+TERRAIN_SCALE=4071.525
+SKY_SCALE=218.146
+SKY_CENTER_Z=2616.78
+
+
+def sky_material():
+    """A visible, see-through +sky wall. Preparation removes +sky faces, so it never exports."""
+    sky=bpy.data.materials.get('+sky') or bpy.data.materials.new('+sky')
+    compat.enable_nodes(sky)
+    bsdf=next((n for n in sky.node_tree.nodes if n.type=='BSDF_PRINCIPLED'),None)
+    if bsdf:
+        bsdf.inputs['Base Color'].default_value=(.45,.65,.95,1);bsdf.inputs['Alpha'].default_value=.18
+    compat.set_alpha(sky,'blend');sky.use_backface_culling=True;sky.diffuse_color=(.45,.65,.95,.18)
+    return sky
+
+
+def starter_template(context,config,ground_preview,chief_asset=None,chief_preview=None):
+    """Paintable terrain plane, a +sky boundary wall and Master Chief for scale (not exported)."""
     ensure_exporter()
-    if preview is None:raise RuntimeError('Load the starter ground material before creating its shell.')
-    meta=read_json(preview)
-    ground=material(meta['materials'][0],Path(preview).parent)
-    bpy.ops.mesh.primitive_cube_add(size=2,location=(0,0,12))
-    obj=bpy.context.object;obj.name='HaloBridge level shell';obj.scale=(30,30,12)
-    bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
-    bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT');bpy.ops.mesh.flip_normals();bpy.ops.object.mode_set(mode='OBJECT')
-    sky=bpy.data.materials.new('+sky');sky.use_nodes=True;sky.node_tree.nodes.get('Principled BSDF').inputs['Alpha'].default_value=0
-    sky.blend_method='CLIP';sky.use_backface_culling=True
-    obj.data.materials.append(ground);obj.data.materials.append(sky)
-    for poly in obj.data.polygons:
-        if poly.center.z>0 or abs(poly.normal.z)<.5:poly.material_index=1
-        else:
-            for index in poly.loop_indices:
-                vertex=obj.data.vertices[obj.data.loops[index].vertex_index]
-                obj.data.uv_layers.active.data[index].uv=(vertex.co.x/4,vertex.co.y/4)
-    obj.matrix_world=Matrix.Scale(100,4)@obj.matrix_world;obj['hb_working_units']=100
-    bpy.context.scene['hb_working_units']=100
-    bpy.context.scene.unit_settings.system='METRIC';bpy.context.scene.unit_settings.scale_length=.03048
+    if ground_preview is None:raise RuntimeError('Load the starter ground material before creating the template.')
+    from . import editable_materials
+    scene=bpy.context.scene;collection=bpy.context.collection
+    scene['hb_working_units']=100
+    scene.unit_settings.system='METRIC';scene.unit_settings.scale_length=.03048
+    if bpy.context.object and bpy.context.object.mode!='OBJECT':bpy.ops.object.mode_set(mode='OBJECT')
+    # Terrain: a single quad with 0-1 UVs, so the editable terrain paints one texture tile.
+    mesh=bpy.data.meshes.new('Terrain')
+    mesh.from_pydata([(-1,-1,0),(1,-1,0),(1,1,0),(-1,1,0)],[],[(0,1,2,3)])
+    uv=mesh.uv_layers.new(name='UVMap')
+    for loop in mesh.loops:
+        co=mesh.vertices[loop.vertex_index].co;uv.data[loop.index].uv=((co.x+1)/2,(co.y+1)/2)
+    terrain=bpy.data.objects.new('Terrain',mesh);collection.objects.link(terrain)
+    terrain.scale=(TERRAIN_SCALE,)*3;terrain['hb_working_units']=100
+    meta=read_json(ground_preview)
+    mesh.materials.append(material(meta['materials'][0],Path(ground_preview).parent))
+    bpy.ops.object.select_all(action='DESELECT');terrain.select_set(True);bpy.context.view_layer.objects.active=terrain
+    try:
+        editable_materials.make(bpy.context,'terrain')
+    except ValueError as error:
+        # The plain shader preview still exports; only painting is unavailable.
+        terrain['hb_template_note']='Paintable terrain unavailable: '+str(error)
+    # Sky boundary: an inward-facing box; its +sky faces are dropped during preparation.
+    box=bpy.data.meshes.new('SkyBoundary')
+    v=[(x,y,z) for x in (-30,30) for y in (-30,30) for z in (-12,12)]
+    box.from_pydata(v,[],[(0,2,3,1),(4,5,7,6),(0,1,5,4),(2,6,7,3),(0,4,6,2),(1,3,7,5)])
+    box.uv_layers.new(name='UVMap');box.materials.append(sky_material())
+    sky=bpy.data.objects.new('SkyBoundary',box);collection.objects.link(sky)
+    sky.scale=(SKY_SCALE,)*3;sky.location=(0,0,SKY_CENTER_Z);sky['hb_working_units']=100
+    chief=None
+    if chief_asset and chief_preview:
+        chief=place(chief_asset,chief_preview,config,location=(0,0,0))
+        chief.name='Master Chief (scale reference)'
+        # Scale reference only: never compiled into the level.
+        chief['hb_ignore']=True
     for screen in bpy.data.screens:
         for area in screen.areas:
             if area.type=='VIEW_3D':area.spaces.active.shading.type='MATERIAL'
-    return obj
+    compat.clear_view_fog(bpy.data.screens)
+    bpy.ops.object.select_all(action='DESELECT');terrain.select_set(True);bpy.context.view_layer.objects.active=terrain
+    return dict(terrain=terrain,sky=sky,chief=chief)
 

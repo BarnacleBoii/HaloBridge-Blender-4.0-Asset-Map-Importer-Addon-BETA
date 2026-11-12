@@ -3,7 +3,7 @@ import json
 import uuid
 from pathlib import Path
 import bpy
-from . import cross_game
+from . import compat, cross_game
 
 
 def image_node(mat, name, image, uv, tile=(1,1), data=False):
@@ -22,7 +22,7 @@ def make(context, mode):
     if obj.get('hb_vehicle_tag') and mode!='colors':raise ValueError('Select Create editable colors for vehicle paint.')
     if obj.mode!='OBJECT':bpy.ops.object.mode_set(mode='OBJECT')
     old=obj.active_material
-    if not old or not old.use_nodes:raise ValueError('Apply an imported material first.')
+    if not old or not compat.nodes_enabled(old):raise ValueError('Apply an imported material first.')
     old_bsdf=next((n for n in old.node_tree.nodes if n.type=='BSDF_PRINCIPLED'),None)
     if not old_bsdf:raise ValueError('Select a material with a Principled shader.')
     try:source=cross_game.texture(old_bsdf.inputs['Base Color'])
@@ -37,11 +37,12 @@ def make(context, mode):
     base,_,tile=source
     layered = mode=='terrain' and any(t['usage']=='blend' for t in source_textures) and any(t.get('blend_channel') in (1,2,4,8) for t in diffuse)
     normal=None if layered else cross_game.texture(old_bsdf.inputs['Normal'])
-    mat=bpy.data.materials.new(old.name+' - Editable '+mode.title());mat.use_nodes=True
+    mat=bpy.data.materials.new(old.name+' - Editable '+mode.title());compat.enable_nodes(mat)
     mat['hb_custom_shader']=mode;mat['hb_custom_id']=uuid.uuid4().hex;mat['hb_bake_size']=1024
     mat['hb_source_shader']=old.get('hb_shader','');mat['hb_shader']=old.get('hb_shader','')
-    mat.blend_method=old.blend_method;mat.use_backface_culling=old.use_backface_culling
-    if 'hb_collision_mode' in old:mat['hb_collision_mode']=old['hb_collision_mode']
+    compat.set_alpha(mat,compat.alpha_mode(old));mat.use_backface_culling=old.use_backface_culling
+    # Registered properties are not dictionary items in Blender 5.
+    if hasattr(mat,'hb_collision_mode'):mat.hb_collision_mode=getattr(old,'hb_collision_mode','AUTO')
     if hasattr(old,'ass_jms'):
         for flag in ('two_sided','transparent_1_sided','transparent_2_sided','render_only','collision_only'):
             if hasattr(old.ass_jms,flag):setattr(mat.ass_jms,flag,getattr(old.ass_jms,flag))
@@ -52,7 +53,7 @@ def make(context, mode):
     if layered:
         from . import layered_preview
         layered_preview.apply(mat,{'textures':source_textures},old['hb_texture_directory'],editable=True)
-        mat.blend_method='OPAQUE'
+        compat.set_alpha(mat,'opaque')
         if obj.data.users>1:obj.data=obj.data.copy()
         uv_layer=obj.data.uv_layers.active
         loops=[i for face in obj.data.polygons if face.material_index==obj.active_material_index for i in face.loop_indices]
@@ -100,14 +101,14 @@ def make(context, mode):
             mix=nodes.new('ShaderNodeMixRGB');mix.blend_type='MIX'
             links.new(channels.outputs[index],mix.inputs[0]);links.new(layers[0] if index==0 else previous,mix.inputs[1]);links.new(layers[index+1],mix.inputs[2]);previous=mix.outputs[0]
         links.new(previous,bsdf.inputs['Base Color'])
-        mat.blend_method='OPAQUE'
+        compat.set_alpha(mat,'opaque')
     else:
         tex=image_node(mat,'Base Texture',basecopy,uv,tile);previous=tex.outputs['Color']
         for index in range(4):
             tint=nodes.new('ShaderNodeMixRGB');tint.name='Color '+str(index+1);tint.label=tint.name;tint.blend_type='MULTIPLY';tint.inputs[2].default_value=(1,1,1,1)
             links.new(channels.outputs[index] if index<3 else masknode.outputs['Alpha'],tint.inputs[0]);links.new(previous,tint.inputs[1]);previous=tint.outputs[0]
         links.new(previous,bsdf.inputs['Base Color'])
-        if mat.blend_method!='OPAQUE':links.new(tex.outputs['Alpha'],bsdf.inputs['Alpha'])
+        if compat.is_transparent(mat):links.new(tex.outputs['Alpha'],bsdf.inputs['Alpha'])
     if mode=='terrain' and all(any(t['usage']=='normal' and t.get('blend_channel')==channel for t in source_textures) for channel in (2,1,4)):
         normal_outputs=[]
         for name,channel in (('Grass',2),('Rock',1),('Dirt',4)):
@@ -128,7 +129,7 @@ def make(context, mode):
 
 
 def validate(mat):
-    if not mat.use_nodes:raise ValueError('Enable material nodes for the editable material.')
+    if not compat.nodes_enabled(mat):raise ValueError('Enable material nodes for the editable material.')
     allowed={'BSDF_PRINCIPLED','OUTPUT_MATERIAL','TEX_COORD','TEX_IMAGE','VECT_MATH','MIX_RGB','SEPARATE_COLOR','NORMAL_MAP','RGB','VALUE','MATH','UVMAP','REROUTE'}
     for node in mat.node_tree.nodes:
         if node.type not in allowed:raise ValueError('Unsupported editable-material node: '+node.name+'. This exporter supports UV/image-based materials.')
@@ -191,7 +192,7 @@ def bake(mat, folder, progress=None):
             normal=bsdf.inputs['Normal'].links[0].from_node
             if normal.type!='NORMAL_MAP':raise ValueError('Use a Normal Map node for editable normal textures.')
             sources.append(('normal_map',normal.inputs['Color'],False))
-        if mat.blend_method!='OPAQUE':sources.append(('alpha_map',bsdf.inputs['Alpha'],False))
+        if compat.is_transparent(mat):sources.append(('alpha_map',bsdf.inputs['Alpha'],False))
         for usage,socket,color in sources:
             if progress:progress('Baking '+mat.name+' / '+usage+' ('+str(size)+' x '+str(size)+')')
             for link in list(emission.inputs['Color'].links):links.remove(link)

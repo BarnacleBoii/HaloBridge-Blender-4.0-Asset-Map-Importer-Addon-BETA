@@ -8,6 +8,8 @@ from .diagnostics import ValidationError
 
 def get(obj, config, progress):
     tag=obj.get('hb_source_tag','')
+    # Set after Tool rejected this object's original collision as ambiguous.
+    if obj.get('hb_collision_fallback'):return None
     if not tag or obj.modifiers or not obj.get('hb_cache'):
         return None
     try:
@@ -17,7 +19,6 @@ def get(obj, config, progress):
     # Model part rebuilds preserve a translated pivot.
     center=Vector(obj.data.get('hb_origin_center',(0,0,0)))
     if center.length and not offset.length:offset=center
-    if any(getattr(m,'hb_collision_mode','AUTO')!='AUTO' for m in obj.data.materials if m):return None
     source=Path(obj['hb_cache'])
     if obj.get('hb_kind')=='instance':
         data=read_json(source/'collision.json',{})
@@ -30,16 +31,23 @@ def get(obj, config, progress):
     if obj.get('hb_parts_enabled'):
         preview=read_json(source/'preview.json',{})
         if set(json.loads(obj['hb_parts_enabled']))!={m.get('choice') for m in preview.get('meshes',[])}:return None
-    kit=config.get('reach_collision_kit') if obj.get('hb_game')=='reach' else config['kit']
-    if not kit:return None
+    game=obj.get('hb_game','halo3')
+    if game==config.get('game','halo3'):kit=config['kit']
+    else:kit=config.get('source_kits',{}).get(game) or (config.get('reach_collision_kit') if game=='reach' else '')
+    # Halo CE / Halo 2 kits have no ManagedBlam; their objects use the static collision fallback.
+    if not kit or not (Path(kit)/'bin'/'ManagedBlam.dll').is_file():return None
     tags=Path(kit)/'tags'
-    if not (tags/(tag+'.model')).is_file():return None
+    # Scenario imports know the exact model tag; map imports share the render model path.
+    model=obj.get('hb_model_tag') or tag
+    if not (tags/(model+'.model')).is_file():return None
     cache=config.setdefault('_collision_reads',{})
-    key=(kit,tag)
+    key=(kit,model,tag)
     if key not in cache:
         directory=Path(config['cache'])/'jobs';out=directory/'model-collision.json'
+        job=dict(operation='model_collision',kit=kit,scenario=model,output=str(out))
+        if model.lower()!=tag.lower():job['template']=tag
         try:
-            cache[key]=jobs.helper('tags',dict(operation='model_collision',kit=kit,scenario=tag,output=str(out)),directory)
+            cache[key]=jobs.helper('tags',job,directory)
         except ValidationError as e:
             progress('Original collision unavailable for '+obj.name+': '+str(e.issues[0]).splitlines()[0])
             cache[key]=None

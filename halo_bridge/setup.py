@@ -44,11 +44,19 @@ def check(config,addon_dir):
     issues=[]
     if os.name!='nt' or platform.machine().lower() not in ('amd64','x86_64'):
         issues.append('This alpha requires 64-bit Windows.')
-    kit=Path(config['kit'])
-    for item in ('tool.exe','sapien.exe','bin/ManagedBlam.dll'):
-        if not (kit/item).is_file():issues.append('Select the '+('Reach' if config.get('game')=='reach' else 'Halo 3')+' Editing Kit folder; missing '+item+'.')
-    if config.get('game','halo3')=='halo3' and not (kit/'tags/levels/multi/deadlock/deadlock.scenario').is_file():
-        issues.append('Extract the Editing Kit tag archives; the High Ground scenario is required for starter sky settings.')
+    from . import games
+    kit=Path(config['kit']);game=games.GAMES.get(config.get('game','halo3'),games.GAMES['halo3'])
+    # Import-only games (Halo CE, Halo 2) read MCC .map files; their kits have no ManagedBlam
+    # and are optional. Prepare still checks the Halo 3 / ODST destination kit separately.
+    import_only=game.get('classic') or not (game.get('sapien_enabled') or game.get('scenario_enabled'))
+    if not import_only:
+        for item in ('tool.exe','sapien.exe','bin/ManagedBlam.dll'):
+            if not (kit/item).is_file():issues.append('Select the '+game['label']+' Editing Kit folder ('+game.get('kit','')+'); missing '+item+'.')
+    elif game.get('classic') and config.get('kit') and not (kit/'tool.exe').is_file():
+        issues.append('Optional: select the '+game['label']+' Editing Kit folder ('+game.get('kit','')+') to import its .scenario tags; tool.exe was not found.')
+    sky=game.get('sky','')
+    if sky and not (kit/'tags'/(sky.replace('\\','/')+'.scenario')).is_file():
+        issues.append('Extract the Editing Kit tag archives; '+sky+'.scenario is required for starter sky settings.')
     maps=Path(config['maps'])
     if not maps.is_dir() or not any(maps.glob('*.map')):
         issues.append('Select the installed MCC maps folder for the chosen game containing .map files.')

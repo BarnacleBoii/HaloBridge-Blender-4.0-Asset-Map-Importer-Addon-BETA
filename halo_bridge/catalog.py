@@ -25,6 +25,8 @@ def fingerprint(path):
     return [str(p.resolve()), s.st_size, s.st_mtime_ns]
 
 def safe_level(name):
+    if name == 'Level_Name_Here':
+        raise ValueError('Name your level first: replace Level_Name_Here in Output Level Name (above the Prepare button) with a name such as shrine20, using lowercase letters, digits or underscores.')
     if not re.fullmatch(r'[a-z][a-z0-9_]{2,31}', name):
         raise ValueError('Output level name (above the Prepare button) is '+repr(name)+'. Enter a name such as shrine20, without .map, folders, spaces or capitals. Use 3-32 lowercase letters, digits or underscores, starting with a letter.')
     if name.upper() in {'CON','PRN','AUX','NUL'}|{'COM'+str(i) for i in range(10)}|{'LPT'+str(i) for i in range(10)}:
@@ -38,27 +40,101 @@ def category(name):
     if any(w in n for w in ('water','river')): return 'Water'
     return 'Structures'
 
+# Editing Kit folder, MCC maps subfolder and Osoyoos generation per game.
+GAME_FOLDERS = {'halo3': ('H3EK', 'halo3', 'halo3'), 'odst': ('H3ODSTEK', 'halo3odst', 'halo3odst'),
+                'reach': ('HREK', 'haloreach', 'haloreach'),
+                'halo1': ('HCEEK', 'halo1', 'halo1'), 'halo2': ('H2EK', 'halo2', 'halo2')}
+# MCC map folders that are not <game>/maps.
+MAP_FOLDERS = {'halo2': 'halo2/h2_maps_win64_dx11'}
+
+def fixed_drives():
+    """Local fixed drive roots (C:/, D:/ ...); skips empty card readers and network drives."""
+    if os.name != 'nt': return []
+    try:
+        import ctypes
+        mask = ctypes.windll.kernel32.GetLogicalDrives(); drives = []
+        for i, letter in enumerate('ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+            if mask >> i & 1 and ctypes.windll.kernel32.GetDriveTypeW(letter+':\\') == 3:
+                drives.append(Path(letter+':/'))
+        return drives
+    except Exception:
+        return [Path(d+':/') for d in 'CDEFGH']
+
+def documents_folder():
+    """The user's Documents folder, including OneDrive or other redirected locations."""
+    home = Path.home()
+    if os.name == 'nt':
+        try:
+            import ctypes, uuid
+            from ctypes import wintypes
+            guid = uuid.UUID('{FDD39AD0-238F-46AF-ADB4-6C85480369C7}')  # FOLDERID_Documents
+            buffer = ctypes.c_wchar_p()
+            fid = (ctypes.c_ubyte*16).from_buffer_copy(guid.bytes_le)
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(fid), 0, None, ctypes.byref(buffer)) == 0:
+                try: return Path(buffer.value)
+                finally: ctypes.windll.ole32.CoTaskMemFree(buffer)
+        except Exception:
+            pass
+    return home/'Documents'
+
+def default_storage(game='halo3'):
+    """Default HaloBridge storage. An existing ~/Documents/HaloBridge keeps being used."""
+    legacy = Path.home()/'Documents/HaloBridge'
+    root = legacy if legacy.is_dir() else documents_folder()/'HaloBridge'
+    # Halo 3 keeps the original storage root so existing projects keep their records.
+    return root if game == 'halo3' else root/game
+
+def appdata_folder():
+    value = os.environ.get('APPDATA')
+    return Path(value) if value else Path.home()/'AppData/Roaming'
+
+MCC_FOLDER = 'Halo The Master Chief Collection'
+
+def mcc_roots(steam_roots):
+    """Steam library MCC folders, then Xbox app / Game Pass installs."""
+    roots = [root/MCC_FOLDER for root in steam_roots]
+    for drive in fixed_drives():
+        for parent in (drive/'XboxGames', drive/'Program Files/ModifiableWindowsApps'):
+            try:
+                if not parent.is_dir(): continue
+                for folder in sorted(parent.iterdir()):
+                    name = folder.name.lower()
+                    if 'master chief' in name or name.startswith('halomcc'):
+                        roots += [folder/'Content', folder]
+            except OSError:
+                pass
+    return roots
+
 def detect_paths(game="halo3"):
     from .setup import steam_libraries
-    home = Path.home(); result = {}
-    settings = home/'AppData/Roaming/Osoyoos/Settings.JSON'
+    result = {}
+    kit_name, mcc, generation = GAME_FOLDERS.get(game, GAME_FOLDERS['halo3'])
+    settings = appdata_folder()/'Osoyoos/Settings.JSON'
     try:profiles=read_json(settings, [])
     except (OSError,ValueError):profiles=[]
     if not isinstance(profiles,list):profiles=[]
     for profile in profiles:
         if not isinstance(profile,dict):continue
-        if profile.get('generation') == ('haloreach' if game=='reach' else 'halo3'):
+        if profile.get('generation') == generation:
             p = Path(profile.get('tool_path','')).parent
             if (p/'tool.exe').is_file(): result['kit'] = str(p); break
     roots = [p/'steamapps/common' for p in steam_libraries()]
-    roots += [Path(f'{d}:/SteamLibrary/steamapps/common') for d in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ']
+    roots += [d/'SteamLibrary/steamapps/common' for d in fixed_drives()]
     roots += [Path(os.environ.get('PROGRAMFILES(X86)', 'C:/Program Files (x86)'))/'Steam/steamapps/common']
+    roots = list(dict.fromkeys(roots))
     for root in roots:
-        kit=root/('HREK' if game=='reach' else 'H3EK')
-        if (kit/'tool.exe').is_file(): result.setdefault('kit', str(kit))
-        maps = root/'Halo The Master Chief Collection'/('haloreach' if game=='reach' else 'halo3')/'maps'
-        if maps.is_dir(): result.setdefault('maps', str(maps))
-    result['cache'] = str(home/'Documents/HaloBridge'/('reach' if game=='reach' else ''))
+        try:
+            kit=root/kit_name
+            if (kit/'tool.exe').is_file(): result.setdefault('kit', str(kit))
+        except OSError:
+            pass
+    for root in mcc_roots(roots):
+        try:
+            maps = root/MAP_FOLDERS.get(game, mcc+'/maps')
+            if maps.is_dir() and any(maps.glob('*.map')): result.setdefault('maps', str(maps))
+        except OSError:
+            pass
+    result['cache'] = str(default_storage(game))
     return result
 
 def scan_library(root):

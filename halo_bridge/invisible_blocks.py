@@ -6,7 +6,7 @@ import math
 import re
 from pathlib import Path
 from mathutils import Matrix, Vector
-from . import blender_ops, jobs
+from . import blender_ops, games, jobs
 from .catalog import read_json
 from .diagnostics import ValidationError
 
@@ -15,7 +15,8 @@ _verified = set()
 
 
 def selected(obj):
-    return (obj.type == 'MESH' and obj.get('hb_game', 'halo3') == 'halo3'
+    # A Halo 3 tag: only kept as original scenery when preparing a Halo 3 level.
+    return (obj.type == 'MESH' and obj.get('hb_game', 'halo3') == 'halo3' and games.target_game() == 'halo3'
             and obj.get('hb_source_tag', '').replace('/', '\\').lower() == TAG
             and not obj.get('hb_preview')
             and (obj.get('hb_map_reference') or not obj.get('hb_ignore')))
@@ -75,7 +76,8 @@ def plan(scene, config):
             identity = obj.get('hb_blocker_id', '')
             if not re.fullmatch(r'hb_[0-9a-f]{24}', identity) or identity in ids:
                 identity = blender_ops.new_id(); obj['hb_blocker_id'] = identity
-            ids.add(identity); euler = rot.to_euler('XYZ')
+            # Halo yaw/pitch/roll is Blender 'ZYX' order (see source_formats.euler_matrix).
+            ids.add(identity); euler = rot.to_euler('ZYX')
             placements.append(dict(id=identity, tag=TAG, position=list(loc / units),
                                    rotation=[math.degrees(euler.z), -math.degrees(euler.y), math.degrees(euler.x)],
                                    scale=float(scale.x) / units))

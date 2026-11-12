@@ -1,14 +1,41 @@
-"""Convert imported Reach preview materials into project-local Halo 3 shaders."""
+"""Convert other games' imported preview materials into project-local destination shaders.
+
+Any material whose shader comes from a game other than the Sapien destination
+(Reach, ODST in a Halo 3 level, Halo CE, Halo 2, ...) is rebuilt from its
+preview textures. Halo 3 and ODST share tag paths, so a shader that already
+exists in the destination kit is reused instead of converted.
+"""
 import hashlib
 from pathlib import Path
 import bpy
 import numpy as np
 from .diagnostics import ValidationError
+from . import compat, games
 
 
-def reach_materials(objects):
+def _kit_has_shader(kit,tag):
+    if not kit or not tag:return False
+    from .export_review import shader_file
+    try:shader_file(kit,tag);return True
+    except ValueError:return False
+
+
+def converts(obj,mat,config=None):
+    """True when this material must be rebuilt from its preview textures."""
+    target=(config or {}).get('game') or games.target_game()
+    if not games.needs_conversion(obj,mat,target):return False
+    source=games.material_game(obj,mat,target)
+    if games.shares_tags(source,target) and config and _kit_has_shader(config.get('kit'),mat.get('hb_shader','')):
+        return False
+    return True
+
+
+def reach_materials(objects,config=None):
+    """Materials needing conversion (name kept for compatibility; covers every source game)."""
     return {m.as_pointer():m for o in objects for m in o.data.materials
-            if m and not m.name.startswith('+') and (m.get('hb_custom_shader') or (m.get('hb_shader_game')!='halo3' and (o.get('hb_game')=='reach' or m.get('hb_game')=='reach')))}
+            if m and not m.name.startswith('+') and (m.get('hb_custom_shader') or converts(o,m,config))}
+
+converted_materials=reach_materials
 
 
 def texture(socket):
@@ -27,6 +54,47 @@ def texture(socket):
         elif mapping.type!='TEX_COORD':raise ValueError('Unsupported texture mapping; use imported UV mapping.')
     if not all(np.isfinite(x) and x>0 for x in tile):raise ValueError('Texture tiling must be positive.')
     return node.image,3 if channel=='Alpha' else None,tile
+
+
+def _recorded(mat,usage):
+    """The material's original texture of this usage, from its import metadata."""
+    import json
+    try:entries=json.loads(mat.get('hb_texture_sources','[]'))
+    except ValueError:return None
+    entry=next((t for t in entries if t.get('usage')==usage),None)
+    if not entry:return None
+    path=Path(mat.get('hb_texture_directory',''))/entry['path']
+    if not path.is_file():raise ValueError('Missing texture: '+str(path))
+    image=bpy.data.images.load(str(path),check_existing=True)
+    if usage=='normal':image.colorspace_settings.name='Non-Color'
+    tile=tuple(float(x) for x in (entry.get('tiling') or (1.,1.))[:2])
+    if not all(np.isfinite(x) and x>0 for x in tile):tile=(1.,1.)
+    channel={1:0,2:1,4:2}.get(entry.get('channels',8),3)
+    return image,channel,tile
+
+
+def sources(mat):
+    """(base, normal, alpha) texture sources: (image, channel, tiling) or None each.
+
+    Simple preview node trees (and user edits to them) are read from the nodes.
+    Layered/detail previews (Halo 3, ODST, Halo 2 ...) fall back to the textures
+    recorded when the material was imported.
+    """
+    bsdf=next((n for n in mat.node_tree.nodes if n.type=='BSDF_PRINCIPLED'),None) if compat.nodes_enabled(mat) else None
+    transparent=compat.is_transparent(mat)
+    try:
+        if not bsdf:raise ValueError('No Principled preview material found.')
+        base=texture(bsdf.inputs['Base Color']);normal=texture(bsdf.inputs['Normal'])
+        alpha=texture(bsdf.inputs['Alpha']) if transparent else None
+        return base,normal,alpha,bsdf
+    except ValueError:
+        if not mat.get('hb_texture_sources'):raise
+    base=_recorded(mat,'diffuse')
+    alpha=None
+    if transparent:
+        alpha=_recorded(mat,'transparency') or (base and (base[0],3,base[2]))
+    if base:base=(base[0],None,base[2])
+    return base,_recorded(mat,'normal'),alpha,bsdf
 
 
 def pixels(image):
@@ -73,9 +141,8 @@ def prepare(objects,folder,progress=None,materials=None):
                 custom_ids.add(mat.get('hb_custom_id'))
                 result[pointer]=editable_materials.bake(mat,folder,progress)
                 continue
-            bsdf=next((n for n in mat.node_tree.nodes if n.type=='BSDF_PRINCIPLED'),None) if mat.use_nodes else None
-            if not bsdf:raise ValueError('No Principled preview material found.')
-            base=texture(bsdf.inputs['Base Color']);normal=texture(bsdf.inputs['Normal']);alpha=texture(bsdf.inputs['Alpha']) if mat.blend_method!='OPAQUE' else None
+            base,normal,alpha,bsdf=sources(mat)
+            if not bsdf and not base:raise ValueError('No Principled preview material found.')
             key='reach_'+hashlib.sha256((mat.get('hb_conversion_id',mat.name)+'|'+mat.get('hb_shader','')).encode()).hexdigest()[:20]
             maps={};tile=base[2] if base else (1.,1.)
             path=folder/(key+'_base.tif')

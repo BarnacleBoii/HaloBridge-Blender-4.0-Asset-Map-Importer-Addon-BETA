@@ -74,6 +74,13 @@ def helper(kind, job, directory, cancel=None):
     return read_json(job['output']) if Path(job['output']).is_file() else None
 
 def extract(asset, config, cancel=None):
+    if asset.get('source')=='scenario' and not asset.get('map'):
+        from . import scenario_scene
+        return scenario_scene.asset_path(asset,config,cancel)
+    if asset.get('source')=='scenario' and not Path(asset['map']).is_file():
+        # Halo CE / Halo 2 scenario assets read a map built by the kit's Tool; rebuild it if storage was cleared.
+        from . import classic_scenario
+        asset=dict(asset,map=str(classic_scenario.build_map(dict(config,game=asset.get('game',config.get('game'))),asset['scenario'],cancel)))
     if asset['kind']=='legacy':
         mapped=asset.get('mapping')
         if not mapped: return Path(asset['path'])
@@ -83,17 +90,18 @@ def extract(asset, config, cancel=None):
     stamp=cache/'stamp.json'
     # Resource cache updates can change an asset even if the selected map does not.
     resources=sorted(Path(asset['map']).parent.glob('*.map'))
-    signature={'extractor':4,'files':[fingerprint(p) for p in resources], 'tag':asset['tag'],'section':asset['section']}
-    if asset['kind']=='instance' and asset.get('game','halo3')=='halo3':
+    # Extractor 5: Halo CE / Halo 2 shaders without a recognised diffuse use their own bitmap.
+    signature={'extractor':5 if asset.get('game') in ('halo1','halo2') else 4,'files':[fingerprint(p) for p in resources], 'tag':asset['tag'],'section':asset['section']}
+    if asset['kind']=='instance' and asset.get('game','halo3') in ('halo3','odst'):
         signature['source_bsp']=fingerprint(Path(config['kit'])/'tags'/(asset['tag']+'.scenario_structure_bsp'))
     if (read_json(stamp)==signature and (cache/'preview.json').is_file()
-            and (asset['kind']!='instance' or asset.get('game')=='reach' or (cache/'collision.json').is_file())): return cache/'preview.json'
+            and (asset['kind']!='instance' or asset.get('game','halo3') not in ('halo3','odst') or (cache/'collision.json').is_file())): return cache/'preview.json'
     cache.mkdir(parents=True,exist_ok=True)
     stamp.unlink(missing_ok=True)
     # Re-extraction must not retain textures from an older resource cache.
     for texture in cache.glob('texture_*.*'):texture.unlink()
     helper('extractor',dict(operation='material' if asset['kind']=='material' else 'extract',game=asset.get('game','halo3'),map=asset['map'],tag=asset['tag'],section=asset['section'],output=str(cache)),Path(config['cache'])/'jobs',cancel)
-    if asset['kind']=='instance' and asset.get('game','halo3')=='halo3':
+    if asset['kind']=='instance' and asset.get('game','halo3') in ('halo3','odst'):
         helper('tags',dict(operation='collision',kit=config['kit'],scenario=asset['tag'],section=asset['section'],asset_name=asset['name'],output=str(cache/'collision.json')),Path(config['cache'])/'jobs',cancel)
     write_json(stamp,signature)
     return cache/'preview.json'
@@ -101,7 +109,7 @@ def extract(asset, config, cancel=None):
 def extract_map_scene(config,map_name,cancel=None,progress=None):
     mp=Path(config['maps'])/map_name
     if not mp.is_file():raise RuntimeError('Choose an existing MCC .map filename for the selected game.')
-    signature={'map_scene':1,'game':config.get('game','halo3'),'resources':[fingerprint(p) for p in sorted(mp.parent.glob('*.map'))]}
+    signature={'map_scene':2 if config.get('game') in ('halo1','halo2') else 1,'game':config.get('game','halo3'),'resources':[fingerprint(p) for p in sorted(mp.parent.glob('*.map'))]}
     # Content-addressed generation keeps a prior completed map cache intact.
     folder=Path(config['cache'])/'map_scenes'/stable_id(str(mp.resolve()),json.dumps(signature,sort_keys=True))
     # A failed BSP extraction must not become a permanently reusable cache.

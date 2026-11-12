@@ -4,22 +4,35 @@ from collections import Counter
 from pathlib import Path
 import bpy
 from mathutils import Vector, Matrix
-from . import blender_ops, cross_game, export_review, vehicles, collision_policy, invisible_blocks
+from . import blender_ops, compat, cross_game, export_review, vehicles, collision_policy, invisible_blocks, original_scenery
 from .catalog import read_json
 from .diagnostics import ValidationError
 
 
 def objects(scene):
     return [o for o in scene.objects if o.type=='MESH' and not o.get('hb_preview') and not vehicles.selected_vehicle(o) and not invisible_blocks.selected(o)
-            and (o.get('hb_map_reference') or not o.get('hb_ignore'))]
+            and not original_scenery.selected(o) and (o.get('hb_map_reference') or not o.get('hb_ignore'))]
 
+
+SKY_FOLDERS = {'sky', 'skies'}
 
 def is_sky(obj):
-    return obj.get('hb_map_reference') and any(c.name.split('.')[0]=='Skies' for c in obj.users_collection)
+    if obj.get('hb_map_reference') and any(c.name.split('.')[0]=='Skies' for c in obj.users_collection):
+        return True
+    # Sky models placed from an index (Halo CE "sky\...", Halo 2 "scenarios\skies\...")
+    # are enormous domes; the selected Sky supplies the level's sky instead.
+    tag = obj.get('hb_source_tag', '').lower().replace('/', '\\')
+    return bool(tag) and obj.get('hb_kind') == 'model' and any(part in SKY_FOLDERS for part in tag.split('\\')[:-1])
 
 
 def warnings(scene):
     result=[]
+    kept=[o for o in scene.objects if original_scenery.selected(o)]
+    if kept:
+        result.append(str(len(kept))+' unedited scenery object(s) from the Editing Kit scenario will be placed as their original scenery tags, keeping their own collision and physics.')
+    changed=original_scenery.edited(scene)
+    if changed:
+        result.append(str(len(changed))+' edited scenario scenery object(s) will export as static geometry instead of their original scenery tags: '+', '.join(o.name for o in changed[:5])+(' ...' if len(changed)>5 else ''))
     if any(o.get('hb_map_reference') or o.get('hb_id') for o in objects(scene)):
         result.append('Automatic collision first tries the verified original source-game collision geometry. Unmatched or edited static meshes use the available box or surface fallback. Render-only foliage has no generated collision. Original vehicle placements use their game tags instead.')
     if any(m and m.name.startswith('+sky') for o in objects(scene) for m in o.data.materials):
@@ -35,7 +48,7 @@ def warnings(scene):
     if any(m and m.get('hb_custom_shader') for o in objects(scene) for m in o.data.materials):
         result.append('Editable materials are baked into level-local textures and shaders. Save your painted images in the blend. Dynamic Halo color changes, reflections and layered shader behavior are not preserved in this baked result.')
     if any(not m.get('hb_custom_shader') for m in cross_game.reach_materials(objects(scene)).values()):
-        result.append("Reach assets use converted textures on static Halo 3 geometry. Layered shaders, water, glow and animated behavior are approximated; transparency uses cutout alpha.")
+        result.append("Assets from other games use converted textures on static geometry. Layered shaders, water, glow and animated behavior are approximated; transparency uses cutout alpha.")
     return result
 
 
@@ -47,23 +60,82 @@ def simple_collision(obj):
     return tag.startswith('objects/characters/') or tag.endswith('/cov_portable_shield/cov_portable_shield')
 
 
+def ambiguous_collision(vertices, faces):
+    """True when welded collision edges are shared by more than two faces.
+
+    Tool welds coincident vertices, so separate pieces that touch create
+    ambiguous edges even though each piece is clean on its own.
+    """
+    if not vertices: return False
+    lo = [min(v[a] for v in vertices) for a in range(3)]
+    hi = [max(v[a] for v in vertices) for a in range(3)]
+    step = max(max(h - l for l, h in zip(lo, hi)) * 1e-5, 1e-6)
+    key = [tuple(round(c / step) for c in v) for v in vertices]
+    uses = Counter()
+    for face in faces:
+        welded = [key[i] for i in face]
+        for a, b in zip(welded, welded[1:] + welded[:1]):
+            if a != b: uses[(a, b) if a < b else (b, a)] += 1
+    return any(count > 2 for count in uses.values())
+
+
 def add_collision_geometry(mesh, slot, corners, faces):
     # Append only to the temporary export mesh, keeping all render loops and UVs.
-    start, loop_start, face_start = len(mesh.vertices), len(mesh.loops), len(mesh.polygons)
-    mesh.vertices.add(len(corners))
-    for index, co in enumerate(corners):
-        mesh.vertices[start + index].co = co
-    mesh.loops.add(sum(map(len,faces)))
-    mesh.polygons.add(len(faces))
-    first=loop_start
-    for index, vertices in enumerate(faces):
-        polygon = mesh.polygons[face_start + index]
-        polygon.loop_start = first
-        polygon.material_index = slot
-        for offset, vertex in enumerate(vertices):
-            mesh.loops[first + offset].vertex_index = start + vertex
-        first+=len(vertices)
+    # bmesh resizes every attribute layer consistently. Raw loops.add/polygons.add
+    # crashed (access violation) on meshes whose UV layers were rebuilt for
+    # converted cross-game materials.
+    import bmesh
+    start, loop_start = len(mesh.vertices), len(mesh.loops)
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(mesh)
+        added = [bm.verts.new(co) for co in corners]
+        bm.verts.index_update()
+        for vertices in faces:
+            try:
+                face = bm.faces.new([added[v] for v in vertices])
+            except (ValueError, IndexError):
+                continue  # duplicate or degenerate collision face
+            face.material_index = slot
+        bm.to_mesh(mesh)
+    finally:
+        bm.free()
     mesh.update(calc_edges=True)
+    # Added elements keep uninitialized attribute memory (Blender 5.2): their UVs
+    # could be NaN, which makes Tool reject the whole ASS. Collision faces are not
+    # rendered, so zero UVs and white colors are safe.
+    for layer in mesh.uv_layers:
+        values = [0.0] * (len(layer.data) * 2)
+        layer.data.foreach_get('uv', values)
+        values[loop_start * 2:] = [0.0] * (len(values) - loop_start * 2)
+        layer.data.foreach_set('uv', values)
+    for attribute in mesh.color_attributes:
+        first_new = loop_start if attribute.domain == 'CORNER' else start
+        values = [0.0] * (len(attribute.data) * 4)
+        attribute.data.foreach_get('color', values)
+        values[first_new * 4:] = [1.0] * (len(values) - first_new * 4)
+        attribute.data.foreach_set('color', values)
+
+
+def repair_texcoords(objects):
+    """Replace non-finite UVs with 0 on export copies; returns {mesh name: count}.
+
+    Tool rejects the whole level for one NaN texture coordinate. They can come
+    from user UV operations on zero-area faces; the source meshes are not changed.
+    """
+    import math
+    repaired = {}
+    for mesh in {obj.data for obj in objects if obj.type == 'MESH'}:
+        for layer in mesh.uv_layers:
+            values = [0.0] * (len(layer.data) * 2)
+            layer.data.foreach_get('uv', values)
+            bad = [i for i, value in enumerate(values) if not math.isfinite(value)]
+            if bad:
+                for i in bad:
+                    values[i] = 0.0
+                layer.data.foreach_set('uv', values)
+                repaired[mesh.name] = repaired.get(mesh.name, 0) + len({i // 2 for i in bad})
+    return repaired
 
 
 def chunk_instances(scene, meshes, names, progress):
@@ -106,7 +178,8 @@ def chunk_instances(scene, meshes, names, progress):
 def export(config,path,progress=None):
     progress=progress or (lambda message:None)
     source=bpy.context.scene;depsgraph=bpy.context.evaluated_depsgraph_get()
-    blockers=invisible_blocks.plan(source,config)
+    original_scenery.reset_cache()
+    blockers=invisible_blocks.plan(source,config)+original_scenery.plan(source,config)
     config['vehicle_placements']=vehicles.plan(source,config)
     for placement in config['vehicle_placements']:progress('Original vehicle placement: '+placement['tag']+' (excluded from static geometry)')
     selected=[o for o in objects(source) if not is_sky(o)]
@@ -147,6 +220,14 @@ def export(config,path,progress=None):
         if slots:
             placement['paint'] = {tag: converted[key]['name'] for tag, key in slots.items()}
     config["converted_shaders"]=list(converted.values())
+    if config.get('sky_mode')=='object':
+        from . import sky_export
+        sky=sky_export.sky_object(source)
+        if sky is None:
+            raise ValidationError(['Sapien Sky is set to a sky from another game, but its sky object (Sapien Sky collection) is missing. Choose the sky again under Sapien Sky, or choose a sky from the '+config.get('game','halo3')+' Editing Kit.'])
+        progress('Converting the sky: '+sky.name)
+        config['sky_object']=sky_export.export(sky,Path(path).parent/'sky',progress)
+        config['converted_shaders']+=config['sky_object']['shaders']
     aliases={entry["name"]:dict(name=entry["name"],generated=True) for entry in converted.values()}
     for obj in selected:
         for mat in used[obj.name]:
@@ -165,7 +246,7 @@ def export(config,path,progress=None):
             if units<=0:raise ValidationError([obj.name+': invalid working scale.'])
             location,rotation,scale=obj.matrix_world.decompose()
             stretch=(rotation.to_matrix().inverted()@obj.matrix_world.to_3x3())*(1/units)
-            original_key=(obj.get('hb_game',''),obj.get('hb_section'),obj.get('hb_source_tag',''),obj.get('hb_cache',''),obj.get('hb_parts_enabled',''),getattr(obj,'hb_static_collision','AUTO'),obj.get('hb_mesh_signature',''))
+            original_key=(obj.get('hb_game',''),obj.get('hb_section'),obj.get('hb_source_tag',''),obj.get('hb_cache',''),obj.get('hb_parts_enabled',''),getattr(obj,'hb_static_collision','AUTO'),obj.get('hb_mesh_signature',''),str(obj.get('hb_collision_fallback','')))
             proxy=simple_collision(obj)
             precise=bool(obj.get("hb_id") or obj.get("hb_map_reference"))
             key=(original_key,proxy,precise,obj.data.as_pointer(),obj.as_pointer() if obj.modifiers else 0,tuple(v for row in stretch for v in row))
@@ -204,7 +285,10 @@ def export(config,path,progress=None):
                 # Leaf cards must not become solid collision solely because they render.
                 from . import original_collision
                 original=original_collision.get(obj, config, progress) if getattr(obj,'hb_static_collision','AUTO')=='AUTO' else None
-                proxy=bool(original) or proxy
+                # Set when Tool rejected this object's collision: 'box', then 'none' (render only).
+                fallback=obj.get('hb_collision_fallback') if getattr(obj,'hb_static_collision','AUTO')=='AUTO' else None
+                no_collision=fallback=='none'
+                proxy=(bool(original) or proxy or bool(fallback)) and not no_collision
                 proxy_slots = set()
                 if proxy:
                     for i, mat in enumerate(mesh.materials):
@@ -215,6 +299,11 @@ def export(config,path,progress=None):
                 points = [mesh.vertices[v].co for f in mesh.polygons if f.material_index in proxy_slots for v in f.vertices]
                 corners = []
                 proxy_faces=[(0,1,3,2),(4,6,7,5),(0,4,5,1),(2,3,7,6),(0,2,6,4),(1,5,7,3)]
+                if original and proxy_slots and ambiguous_collision(original[0],original[1]):
+                    # Touching collision pieces weld into edges shared by 3+ faces, which
+                    # Tool rejects ("bad connections - ambiguous"); use the box instead.
+                    progress('Original collision has overlapping pieces; using a simple box: '+obj.name)
+                    original=None
                 if original and proxy_slots:
                     vertices,proxy_faces,offset=original
                     corners=[stretch @ (Vector(v)-offset) for v in vertices]
@@ -225,21 +314,24 @@ def export(config,path,progress=None):
                         corners = [(x,y,z) for x in limits[0] for y in limits[1] for z in limits[2]]
                 for i,mat in enumerate(list(mesh.materials)):
                     if mat:
-                        mk=mat.as_pointer();material_key=(mk,open_surface,precise,bool(corners) and i in proxy_slots)
+                        mk=mat.as_pointer();material_key=(mk,open_surface,precise,bool(corners) and i in proxy_slots,no_collision)
                         if material_key not in material_cache:
                             copy=mat.copy();materials.append(copy);material_cache[material_key]=copy
                             if mk in converted:copy["hb_shader"]=converted[mk]["name"]
                             shader=aliases.get(mat.get('hb_shader','').replace('/','\\'),{}).get('source')
                             if precise:copy.ass_jms.precise=True
-                            copy.ass_jms.render_only=(bool(corners) and i in proxy_slots) or collision_policy.render_only(mat,shader,mat.get('hb_shader',''))
-                            copy.ass_jms.collision_only=False
+                            copy.ass_jms.render_only=no_collision or (bool(corners) and i in proxy_slots) or collision_policy.render_only(mat,shader,mat.get('hb_shader',''))
+                            # Source surfaces flagged collision-only in the original level stay invisible.
+                            from .scenario_scene import material_flags
+                            source_flags=material_flags(mat)
+                            copy.ass_jms.collision_only='collision_only' in source_flags and not copy.ass_jms.render_only
                             if copy.ass_jms.render_only:progress('Render-only material (no generated collision): '+mat.name)
                             # Preserve explicit Halo sidedness. Imported alpha cards
                             # already display both sides when backface culling is off.
                             # Opaque viewport defaults alone do not request duplication.
                             if not mat.name.startswith('+'):
                                 copy.ass_jms.two_sided=bool(mat.ass_jms.two_sided or
-                                    (mat.blend_method!='OPAQUE' and not mat.use_backface_culling))
+                                    (compat.is_transparent(mat) and not mat.use_backface_culling))
                                 if open_surface and not copy.ass_jms.two_sided and not copy.ass_jms.transparent_2_sided and not copy.ass_jms.render_only:
                                     copy.ass_jms.transparent_1_sided=True
                         mesh.materials[i]=material_cache[material_key]
@@ -261,7 +353,10 @@ def export(config,path,progress=None):
                     mesh.materials.append(cm)
                     add_collision_geometry(mesh, len(mesh.materials)-1, corners, proxy_faces)
                     progress(('Original Halo collision: ' if original else 'Simple box collision: ')+obj.name)
-                routes[key]=('Original Halo collision' if original else 'Simple box') if corners else ('Mesh surfaces' if any(m and not m.ass_jms.render_only for m in mesh.materials) else 'Render only')
+                routes[key]=('Not exported: only +sky faces (the generated sky boundary encloses the level)' if not mesh.polygons else
+                             ('Original Halo collision' if original else 'Simple box'+(' (Tool rejected the original collision)' if fallback else '')) if corners else
+                             'Render only (Tool rejected its collision)' if no_collision else
+                             ('Mesh surfaces' if any(m and not m.ass_jms.render_only for m in mesh.materials) else 'Render only'))
             config['collision_routes'][obj.name]=routes[key]
             if not cache[key].polygons:continue
             clone=bpy.data.objects.new('%hb_'+str(len(temp.objects)),cache[key]);temp.collection.objects.link(clone)
@@ -325,6 +420,14 @@ def export(config,path,progress=None):
         # Normalize working units before passing to the established ASS adapter.
         for obj in temp.objects:
             units=obj['hb_working_units'];obj.matrix_world=Matrix.Scale(1/units,4)@obj.matrix_world;obj['hb_working_units']=1
+        repaired=repair_texcoords(temp.objects)
+        if repaired:
+            owners={}
+            for obj in temp.objects:
+                if obj.data.name in repaired:
+                    owners.setdefault(obj.data.name,config['geometry_names'].get(obj.name.lstrip('%').split('.')[0],obj.name))
+            config['uv_repairs']=[f'{owners.get(name,name)}: {count} invalid texture coordinate(s) set to 0 in the export copy' for name,count in sorted(repaired.items())]
+            for line in config['uv_repairs']:progress('Repaired '+line)
         progress(f'{len(selected)}/{len(selected)} assets processed. Writing geometry file; waiting for the Blender exporter...')
         bpy.context.window.scene=temp
         return blender_ops.export_scene(config,path)+blockers

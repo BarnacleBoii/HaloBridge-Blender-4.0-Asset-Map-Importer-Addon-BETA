@@ -62,9 +62,16 @@ def prepare(config, ass_file, placements, cancel=None, progress=None):
     if target.exists() and not previous:
         raise RuntimeError('This level already exists and is not owned by HaloBridge. Choose a new level name.')
     if previous and previous.get('kit')!=str(kit.resolve()): raise RuntimeError('Manifest belongs to a different editing kit.')
+    sky_object=config.get('sky_object')
     sky=config.get('sky_scenario',r'levels\multi\deadlock\deadlock').replace('/', '\\')
     sky_parts=sky.split('\\')
-    if not sky or any(p in ('','.','..') or ':' in p for p in sky_parts) or not (kit/'tags'/(sky+'.scenario')).is_file():
+    if sky_object:
+        # Converted skies carry no sky lighting. Test lighting is baked with a kit sky
+        # (the one chosen for this game, or its default) and the converted sky is set after.
+        light_sky=sky if sky and ':' not in sky and (kit/'tags'/(sky+'.scenario')).is_file() else config.get('default_sky','')
+        if not light_sky or not (kit/'tags'/(light_sky+'.scenario')).is_file():light_sky=''
+        sky='converted:'+sky_object['name']
+    elif not sky or any(p in ('','.','..') or ':' in p for p in sky_parts) or not (kit/'tags'/(sky+'.scenario')).is_file():
         raise RuntimeError('Sky source scenario must name an existing Editing Kit scenario without its extension, for example levels\\multi\\shrine\\shrine.')
     ensure_sapien_closed()
     jobs=cache/'jobs';jobs.mkdir(parents=True,exist_ok=True)
@@ -111,9 +118,11 @@ def prepare(config, ass_file, placements, cancel=None, progress=None):
             shader_root='levels\\multi\\'+level+'\\shaders'
             bitmap_dir=kit/'data'/bitmap_root;bitmap_dir.mkdir(parents=True,exist_ok=True)
             shaders=[]
+            sky_shader_root='levels\\multi\\'+level+'\\sky\\shaders'
             for index,entry in enumerate(converted,1):
                 progress(f'Copying converted material {index}/{len(converted)}: '+entry['name'])
-                item=dict(path=shader_root+'\\'+entry['name'])
+                # Tool's render-sky finds a sky's shaders in the sky folder's own shaders folder.
+                item=dict(path=(sky_shader_root if entry.get('folder')=='sky' else shader_root)+'\\'+entry['name'],sky=entry.get('folder')=='sky',additive=bool(entry.get('additive')))
                 for usage,source in entry['maps'].items():
                     source=Path(source);shutil.copy2(source,bitmap_dir/source.name)
                     item[usage]=bitmap_root+'\\'+source.stem
@@ -131,13 +140,23 @@ def prepare(config, ass_file, placements, cancel=None, progress=None):
         if f"=== imported structure '{scenario}' in " not in text or not target.is_file() or not target.with_suffix('.scenario_structure_bsp').is_file():
             raise RuntimeError('Halo did not confirm the level structure import or produce its scenario and BSP tags.')
         stage(4,'Apply sky and scenario settings')
-        if not previous or previous.get('sky_scenario',r'levels\multi\deadlock\deadlock')!=sky: tag_job('environment',template=sky)
+        if sky_object:
+            # A sky converted from another game: build its render model, then its model,
+            # scenery and the scenario's sky reference.
+            sky_root='levels\\multi\\'+level+'\\sky'
+            render=kit/'data'/sky_root/'render';render.mkdir(parents=True,exist_ok=True)
+            shutil.copy2(sky_object['jms'],render/'sky.JMS')
+            progress('Building the converted sky: '+sky_object['name'])
+            tool('render-sky',sky_root)
+            tag_job('sky_object',template=sky_root+'\\sky',radius=float(sky_object.get('radius',0)))
+            if config.get('lighting',True) and light_sky:tag_job('environment',template=light_sky)
+        elif not previous or previous.get('sky_scenario',r'levels\multi\deadlock\deadlock')!=sky: tag_job('environment',template=sky)
         # Compilation may legitimately update derived placement fields. User edits
         # were checked above, before running Tool with Sapien closed.
         after_compile=tag_job('inspect')['state']
         tag_job('sync',placements=placements,previous=after_compile)
         if config.get('vehicle_placements') or any(key.startswith('vehicle:') for key in after_compile):
-            progress('Placing original Halo 3 vehicles (using existing vehicle tags)')
+            progress('Placing original vehicles (using existing vehicle tags)')
             tag_job('sync_vehicles',placements=config.get('vehicle_placements',[]),previous=after_compile)
         if config.get('spawn_position'):tag_job('ensure_spawn',position=config['spawn_position'])
         if config.get('lighting',True):
@@ -153,6 +172,9 @@ def prepare(config, ass_file, placements, cancel=None, progress=None):
             tool('faux-build-linear-textures-with-intensity-from-quadratic',scenario,level)
             tool('faux-compress-scenario-bitmaps-dxt5',scenario,level)
             tool('faux-farm-compression-merge',scenario,level)
+            if sky_object and light_sky:
+                progress('Setting the converted sky (lighting was baked with '+light_sky.rsplit('\\',1)[-1]+')')
+                tag_job('sky_object',template='levels\\multi\\'+level+'\\sky\\sky',radius=float(sky_object.get('radius',0)))
         else:stage(5,'Finalize (test lighting disabled)')
         final=tag_job('inspect')
         write_json(manifest,dict(version=1,kit=str(kit.resolve()),scenario=scenario,state=final['state'],placements=placements,completed=time.time(),lighting=bool(config.get('lighting',True)),sky_scenario=sky))

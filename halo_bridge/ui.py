@@ -1,4 +1,5 @@
 import json
+import sys
 import copy
 import time
 import textwrap
@@ -9,12 +10,12 @@ from pathlib import Path
 import bpy
 from bpy.app.handlers import persistent
 from bpy.props import StringProperty, BoolProperty, IntProperty, CollectionProperty, PointerProperty, EnumProperty
-from .catalog import detect_paths,read_json,write_json,scan_library,merge_assets,indexed_assets,safe_level
+from .catalog import detect_paths,default_storage,read_json,write_json,scan_library,merge_assets,indexed_assets,safe_level
 from . import jobs, build, blender_ops, setup, map_scene, navigation, map_export, skies, geometry_export
 from .diagnostics import ValidationError
 from . import source_names,export_review,shader_choices,vehicles,invisible_blocks,model_parts,editable_materials
 from .progress import PreparationActivity
-from . import games
+from . import games, compat, scenario_scene, original_scenery, classic_scenario, sky_export
 
 def record_failure(error, details=None):
     global _error,_message,_reported_issues
@@ -55,6 +56,11 @@ def history_available(redo=False):
     expected=stack[-1][0 if redo else 1]
     return expected['path']==_catalogue_path and expected['data']==_catalogue
 _task=None
+LEVEL_PLACEHOLDER='levelname123'
+SOURCE_SUMMARIES={
+    'map':'.map assets: everything the game map loads, including shared objects and characters. Best for browsing and kitbashing.',
+    'scenario':'.scenario assets: the level\'s own objects, built from Editing Kit source files with exact shader names. Best for editing and Sapien.',
+}
 _preview_generation=0
 _preview_pending=None
 _error=''
@@ -65,6 +71,7 @@ class HBAsset(bpy.types.PropertyGroup):
     level:StringProperty()
     category:StringProperty()
     kind:StringProperty()
+    source:StringProperty(default='map')
     checked:BoolProperty(name='Select asset',description='Include this asset in actions for checked entries in the current list')
     hidden:BoolProperty(default=False)
 
@@ -76,7 +83,9 @@ def visibility_predicate(settings):
     if not settings.filter_level_selected and isinstance(raw,int):level=next((row[0] for row in level_items(settings,None) if row[3]==raw),'__ALL__')
     level=level_key(level)
     categories={name:getattr(settings,'show_'+name,True) for name in ('vegetation','structures','materials','rocks','water')}
+    source={'MAP':'map','SCENARIO':'scenario'}.get(getattr(settings,'filter_source','ALL'))
     return lambda item: (item.hidden==hidden and (level=='__ALL__' or level_key(item.level)==level)
+                        and (source is None or (item.source or 'map')==source)
                         and (not query or query in (item.name+' '+item.level+' '+item.kind).lower())
                         and categories.get(item.category.lower(),True))
 
@@ -152,10 +161,13 @@ def game_changed(settings,context):
     if not context:return
     stop_preview(context)
     profiles=json.loads(settings.game_profiles or '{}')
-    keys=('kit','maps','cache','map_name')
+    keys=('kit','maps','cache','map_name','scenario_path')
     profiles[settings.previous_game]={k:getattr(settings,k) for k in keys}
-    chosen=profiles.get(settings.game) or dict(detect_paths(settings.game),map_name=games.GAMES[settings.game]['map_name'])
-    for key in keys:setattr(settings,key,chosen.get(key,''))
+    game=games.GAMES[settings.game]
+    chosen=profiles.get(settings.game) or dict(detect_paths(settings.game),map_name=game['map_name'],scenario_path=game.get('scenario',''))
+    for key in keys:setattr(settings,key,chosen.get(key) or (game.get('scenario','') if key=='scenario_path' else ''))
+    # Prepare for the game being imported when its Editing Kit supports Sapien.
+    if game['sapien_enabled']:settings.export_target=settings.game
     settings.shader_choice='NONE';settings.shader_level='ALL';settings.game_profiles=json.dumps(profiles);settings.previous_game=settings.game
     _catalogue_path=None;_level_items_token=None
     _catalogue=read_json(Path(bpy.path.abspath(settings.cache))/'catalogue.json',{'version':1,'assets':[]})
@@ -170,18 +182,24 @@ class HBSettings(bpy.types.PropertyGroup):
     maps:StringProperty(name='Halo 3 .map Files',subtype='DIR_PATH',description='Your installed MCC maps folder for the selected Halo game')
     library:StringProperty(name='Extracted library',subtype='DIR_PATH')
     cache:StringProperty(name='Project and cache folder',subtype='DIR_PATH',description='Stores automatically extracted assets, project records, backups, and job logs for reuse')
+    scenario_path:StringProperty(name='Editing Kit scenario',default='levels\\multi\\guardian\\guardian',description='Scenario tag path relative to the Editing Kit tags folder, without .scenario. Use the adjacent dropdown to search the kit')
     map_name:StringProperty(name='Choose .map file',default='010_jungle.map',description='Type a map filename, or use the adjacent dropdown to search maps in the selected game folder')
-    level:StringProperty(name='Output Level Name (without .map)',default='hb_jungle_map',description='Name for your generated level; use 3–32 lowercase letters, digits, or underscores, starting with a letter')
-    export_target:EnumProperty(name='Export to Sapien',items=[('halo3','Halo 3','Prepare using the Halo 3 Editing Kit'),('reach','Halo: Reach — not available yet','Reach importing is supported, but Reach Sapien compilation and tag writing are not implemented')],default='halo3')
+    level:StringProperty(name='Output Level Name (without .map)',default=LEVEL_PLACEHOLDER,description='Name for your generated level: 3–32 lowercase letters, digits, or underscores, starting with a letter. Give each level its own name')
+    export_target:EnumProperty(name='Export to Sapien',items=games.SAPIEN_ITEMS,default='halo3')
     skip_invalid:BoolProperty(name='Skip objects with export problems',default=False,description='After review, omit entire objects with detected mesh or material problems. Objects stay in Blender. Compiler errors still stop the build')
     sky_choice:EnumProperty(name='(Experimental) Sky From Map',description='Choose the primary sky from any scanned Editing Kit map. Existing lightmaps and weather are not converted',items=skies.items)
     sky_selected:StringProperty(default='AUTO',description='Selected source scenario, stored independently of the scanned list')
+    sky_game:EnumProperty(name='Sky game',items=skies.GAME_ITEMS,default='halo3',description='Game to take the Sapien sky from. A sky from the Sapien destination game uses its Editing Kit sky as-is; a sky from any other game is rebuilt as a converted sky object')
     sky_scenario:StringProperty(name='Sky source scenario',default='levels\\multi\\deadlock\\deadlock',description='Existing Editing Kit scenario whose sky references are used; no .scenario extension. Whole-map imports fill this from their source. This does not copy terrain or gameplay')
     lighting:BoolProperty(name='Generate Test Lighting for Sapien Level',default=True,description='Generate quick test lighting during Sapien preparation; turn off for faster geometry iterations')
     open_sapien:BoolProperty(name='Open Sapien when ready',default=False,description='Launch the prepared scenario in Sapien automatically after a successful build')
     search:StringProperty(name='Search Assets',description='Filter assets as you type by name, source map, or asset type; applies within the active tab and enabled categories',options={'TEXTEDIT_UPDATE'},update=browsing_changed)
     filter_level_selected:StringProperty(default='',options={'HIDDEN'})
     filter_level:EnumProperty(name='Level Imported',description='Filter by the .map file an asset was indexed from. Shared assets can appear in more than one map',items=level_items,update=level_filter_changed)
+    filter_source:EnumProperty(name='Asset source',description='Show assets indexed from .map files, from Editing Kit .scenario tags, or both',
+                               items=[('ALL','All Sources','Assets from both .map files and .scenario tags'),
+                                      ('MAP','.map Assets','Assets indexed from installed .map files'),
+                                      ('SCENARIO','.scenario Assets','Assets indexed from Editing Kit .scenario tags')],update=browsing_changed)
     filter_category:EnumProperty(name='Category',items=[(n,n,'') for n in ('All','Vegetation','Rocks','Structures','Water','Materials')],update=browsing_changed)
     show_vegetation:BoolProperty(name='Vegetation',default=True,update=browsing_changed)
     show_rocks:BoolProperty(name='Rocks',default=True,update=browsing_changed)
@@ -205,7 +223,7 @@ class HBSettings(bpy.types.PropertyGroup):
 def config(context):
     s=context.scene.halo_bridge
     # Keep saved project locations; new scenes use managed storage automatically.
-    if not s.cache:s.cache=str(Path.home()/'Documents/HaloBridge')
+    if not s.cache:s.cache=str(default_storage('halo3'))
     result={n:getattr(s,n) for n in ('game','kit','maps','library','cache','level','lighting','sky_scenario')}
     for n in ('kit','maps','library','cache'):result[n]=bpy.path.abspath(result[n])
     result['skip_invalid']=s.skip_invalid;result['export_target']=s.export_target
@@ -218,9 +236,15 @@ def export_config(context):
     if not games.GAMES[target.game]['sapien_enabled']:
         raise RuntimeError('Sapien export for '+games.GAMES[target.game]['label']+' is not implemented. Choose Halo 3 to prepare mixed-game assets.')
     settings=context.scene.halo_bridge
-    reach_profile=json.loads(settings.game_profiles or '{}').get('reach',{})
-    result['reach_collision_kit']=bpy.path.abspath(settings.kit if settings.game=='reach' else reach_profile.get('kit') or games.detected('reach').get('kit',''))
+    result['source_kits']={key:bpy.path.abspath(kit) for key,kit in games.source_kits(settings).items()}
+    result['reach_collision_kit']=result['source_kits'].get('reach','')
     result.update(game=target.game,kit=bpy.path.abspath(target.kit),maps=bpy.path.abspath(target.maps),cache=bpy.path.abspath(target.cache))
+    # Another game's default sky scenario does not exist in this kit; use this game's default.
+    defaults={g.get('sky') for key,g in games.GAMES.items() if key!=target.game and g.get('sky')}
+    if result.get('sky_scenario') in defaults and games.GAMES[target.game].get('sky'):
+        result['sky_scenario']=games.GAMES[target.game]['sky']
+    result['sky_mode']='kit' if skies.kit_sky(settings) else 'object'
+    result['default_sky']=games.GAMES[target.game].get('sky','')
     return result
 
 
@@ -254,7 +278,7 @@ def refresh(context,persist=True):
     checked={a.asset_id for a in s.assets if a.checked}
     s.assets.clear()
     for a in _catalogue['assets']:
-        row=s.assets.add();row.name=a['name'];row.asset_id=a['id'];row.level=a['level'];row.category=a['category'];row.kind=a['kind']
+        row=s.assets.add();row.name=a['name'];row.asset_id=a['id'];row.level=a['level'];row.category=a['category'];row.kind=a['kind'];row.source=a.get('source','map')
         row.hidden=bool(a.get('hidden',False));row.checked=a['id'] in checked
     _level_items_token=None
     if previous_level!='__ALL__' and level_key(previous_level) not in {level_key(a.level) for a in s.assets}:s.filter_level='__ALL__'
@@ -354,6 +378,36 @@ class HBTask:
             finally:self.finished=True
         self.thread=threading.Thread(target=run,daemon=True);self.thread.start()
 
+_box_retry=0
+COLLISION_ERRORS=r'\(object (.+?)\) (?:bad connections - \d+ ambiguous|degenerate collision edge|bad connections)'
+
+def retry_with_box_collision(error):
+    """Tool rejected the collision of specific imported objects.
+
+    Collision taken from another game (or its render mesh) can contain pieces
+    Tool welds into ambiguous or degenerate edges. Step only those objects down:
+    original collision -> simple box -> render only (no collision), remembered
+    on the object as hb_collision_fallback, and compile again (up to 3 attempts).
+    """
+    global _box_retry
+    if _box_retry>=2:
+        _box_retry=0;return False
+    import re
+    text='\n'.join(str(i) for i in (getattr(error,'issues',None) or [str(error)]))
+    names={m.group(1) for m in re.finditer(COLLISION_ERRORS,text)}
+    objects=[o for name in names for o in [bpy.context.scene.objects.get(name)]
+             if o and o.get('hb_source_tag') and o.get('hb_collision_fallback')!='none' and getattr(o,'hb_static_collision','AUTO')=='AUTO']
+    if not objects or len(objects)!=len(names):
+        _box_retry=0;return False
+    for obj in objects:
+        obj['hb_collision_fallback']='box' if not obj.get('hb_collision_fallback') else 'none'
+    prepare_status('Tool rejected the collision of '+str(len(objects))+' object(s); recompiling with simpler collision for them: '+', '.join(o.name for o in objects[:5]))
+    _box_retry+=1
+    try:bpy.ops.halo_bridge.prepare('EXEC_DEFAULT',warnings_accepted=True)
+    except Exception:
+        _box_retry=0;return False
+    return _task is not None
+
 def start(context,fn,done,message,undo=False):
     global _task,_message,_error
     if _task:raise RuntimeError('Wait for the current job or cancel it.')
@@ -394,6 +448,8 @@ def poll():
                 return .01
         except StopIteration:pass
         except Exception as e:
+            if getattr(task,'is_prepare',False) and retry_with_box_collision(e):
+                return .2 if _task else None
             if getattr(task,'is_prepare',False):prepare_status(('Preparation cancelled.' if isinstance(e,jobs.Cancelled) else 'Preparation failed: '+(str(e).strip() or type(e).__name__).splitlines()[0]))
             if hasattr(task,'application'):task.application.close()
             record_failure(e,getattr(task,'traceback',None) or traceback.format_exc())
@@ -465,9 +521,11 @@ class HBCheckSetup(Guard,bpy.types.Operator):
     def run(self,context):
         global _message,_error
         issues=setup.check(config(context),Path(__file__).parent)
-        if bpy.app.version[:2]!=(4,0):issues.append('This alpha is tested with Blender 4.0; other versions are not supported yet.')
+        if bpy.app.version<(4,0,0):issues.append('HaloBridge needs Blender 4.0 or newer (4.0 and 5.2 are the tested targets).')
         try:blender_ops.ensure_exporter()
         except Exception as e:issues.append(str(e))
+        if sys.version_info>=(3,13) and compat.toolset_frame_hack():
+            issues.append('This Halo Asset Blender Development Toolset release cannot export on Blender '+'.'.join(map(str,bpy.app.version[:2]))+' (Python 3.13). Install the current General-101 release (v432 or newer).')
         text=bpy.data.texts.get('HaloBridge diagnostics') or bpy.data.texts.new('HaloBridge diagnostics')
         text.clear();text.write('\n\n'.join(issues) if issues else 'Setup checks passed. Index a map to begin.')
         _error='\n'.join(issues)
@@ -522,8 +580,8 @@ class HBChooseMap(bpy.types.Operator):
 
 
 class HBIndex(Guard,bpy.types.Operator):
-    bl_idname='halo_bridge.index';bl_label='Index Map Assets'
-    bl_description='List assets in the selected game map for browsing; models and textures are extracted and cached when first used'
+    bl_idname='halo_bridge.index';bl_label='Index .map Assets'
+    bl_description='List every asset the chosen .map loads (including shared objects, weapons and characters) in the Indexed Asset List; models and textures are extracted and cached when first used'
     def run(self,context):
         cfg=config(context);s=context.scene.halo_bridge;mp=Path(cfg['maps'])/s.map_name
         if not mp.is_file():raise RuntimeError('Choose an existing .map file for the selected game.')
@@ -642,15 +700,13 @@ class HBPlace(Guard,bpy.types.Operator):
                 data=read_json(path);mat=blender_ops.material(data['materials'][0],Path(path).parent);mat['hb_game']=asset['game']
                 mat['hb_game']=asset['game'];mat['hb_asset_id']=asset['id'];mat.use_fake_user=True;mat.asset_mark()
                 if apply_material:
-                    if target.data.users>1:target.data=target.data.copy()
-                    if target.data.materials:target.data.materials[target.active_material_index]=mat
-                    else:target.data.materials.append(mat)
+                    blender_ops.add_material(target,mat)
                     clear_previews(context)
                 elif preview_only:
                     bpy.ops.mesh.primitive_uv_sphere_add(segments=24,ring_count=16,location=context.scene.cursor.location)
                     sphere=bpy.context.object;sphere.data.materials.append(mat)
                     show_preview(context,sphere,asset['name'])
-                _message='Material preview shown in viewport (excluded from export).' if preview_only else ('Applied ' if apply_material else 'Loaded material (no object changed): ')+asset['name']
+                _message='Material preview shown in viewport (excluded from export).' if preview_only else ('Added and assigned material (earlier materials kept in their slots): ' if apply_material else 'Loaded material (no object changed): ')+asset['name']
                 return
             if targets:
                 swapped=swap_objects(context,targets,asset,path,cfg)
@@ -847,29 +903,131 @@ class HBImportMapScene(Guard,bpy.types.Operator):
     def run(self,context):
         cfg=config(context);name=context.scene.halo_bridge.map_name
         stop_preview(context)
+        start(context,lambda cancel:jobs.extract_map_scene(cfg,name,cancel,set_message),lambda manifest:finish_map_scene(context,manifest),'Reading original map layout…')
+        _task.application_budget=.05
+
+
+def set_message(message):
+    global _message
+    _message=message
+
+
+def finish_map_scene(context,manifest,source='Original map layout'):
+    """Create the objects of an extracted map scene and write its report (a generator)."""
+    global _message
+    data=read_json(manifest)
+    yield from map_scene.import_scene(context,manifest,set_message)
+    if games.GAMES[context.scene.halo_bridge.game].get('sapien_enabled'):context.scene.halo_bridge.sky_scenario=data['scenario']
+    warnings=data.get('warnings',[])
+    report=source+': '+data['scenario']+'\n\n'
+    report+='Terrain BSPs: '+str(data['decoded_bsps'])+'/'+str(data['expected_bsps'])+'\n'
+    report+='\n'.join(k+': '+str(v) for k,v in data.get('counts',{}).items())
+    report+='\n\nImport scope:\n'+'\n'.join(data.get('limitations',[]))
+    if warnings:report+='\n\nMissing or approximated elements:\n'+'\n'.join(warnings)
+    text=bpy.data.texts.get('HaloBridge map import report') or bpy.data.texts.new('HaloBridge map import report');text.clear();text.write(report)
+    _message=('Imported original map base' if source=='Original map layout' else 'Imported '+data['scenario'].rsplit('\\',1)[-1]+' from the Editing Kit')+': '+str(len(data['placements']))+' mesh placements; terrain BSPs '+str(data['decoded_bsps'])+'/'+str(data['expected_bsps'])+'. '+str(len(warnings))+' warnings. See map import report.'
+    if data['decoded_bsps']!=data['expected_bsps']:
+        issues=['Incomplete import: '+str(data['decoded_bsps'])+'/'+str(data['expected_bsps'])+' terrain BSPs. This scene is not ready for Sapien preparation.']
+        issues.extend(w for w in warnings if w.startswith('BSP '))
+        record_failure(ValidationError(issues,'Map extraction'))
+        bpy.ops.halo_bridge.report_diagnostics()
+
+_scenario_items=[]
+_scenario_retired=[]
+
+
+class HBChooseScenario(bpy.types.Operator):
+    bl_idname='halo_bridge.choose_scenario';bl_label='Choose Editing Kit scenario'
+    bl_description='Search the .scenario tags in the selected game\'s Editing Kit; choosing one fills the scenario path without importing'
+    bl_property='choice'
+    choice:EnumProperty(items=lambda self,context:_scenario_items)
+    @classmethod
+    def poll(cls,context):return _task is None
+    def invoke(self,context,event):
+        global _scenario_items
+        kit=Path(bpy.path.abspath(context.scene.halo_bridge.kit))
+        classic=games.GAMES[context.scene.halo_bridge.game].get('classic')
+        names=(classic_scenario.scenarios(kit) if classic else scenario_scene.scenarios(kit)) if context.scene.halo_bridge.kit else []
+        if not names:
+            self.report({'WARNING'},'No .scenario tags found under '+str(kit/'tags')+'. Choose the '+games.GAMES[context.scene.halo_bridge.game]['label']+' Editing Kit folder and extract its tag archives.');return {'CANCELLED'}
+        _scenario_retired.append(_scenario_items)
+        _scenario_items=[(name,name,'Use '+name,index) for index,name in enumerate(names)]
+        context.window_manager.invoke_search_popup(self)
+        return {'RUNNING_MODAL'}
+    def execute(self,context):
+        if self.choice not in {item[0] for item in _scenario_items}:return {'CANCELLED'}
+        context.scene.halo_bridge.scenario_path=self.choice
+        return {'FINISHED'}
+
+
+class HBImportScenario(Guard,bpy.types.Operator):
+    bl_idname='halo_bridge.import_scenario';bl_label='Import level from .scenario (Recommended)'
+    bl_description='Build the level from its Editing Kit .scenario tag: BSP geometry from the source files stored in the tags, every scenery, crate, machine, control and vehicle placement, and the tag shader on each surface. Unedited scenery stays original scenery when preparing for Sapien. Halo: Reach kits carry no source files, so Reach geometry comes from the installed map'
+    def run(self,context):
+        cfg=config(context);s=context.scene.halo_bridge
+        game=games.GAMES[s.game]
+        if not game.get('scenario_enabled'):raise RuntimeError('Editing Kit scenario import is not available for '+game['label']+'.')
+        if not s.kit or not (Path(cfg['kit'])/'tags').is_dir():raise RuntimeError('Choose the '+game['label']+' Editing Kit folder ('+game.get('kit','')+', it contains tool.exe and tags) first.')
+        scenario=scenario_scene.safe_tag(s.scenario_path)
+        stop_preview(context)
+        if game.get('classic'):
+            def build(cancel):
+                built=classic_scenario.build_map(cfg,scenario,cancel,set_message)
+                return jobs.extract_map_scene(classic_scenario.map_config(cfg,built),built.name,cancel,set_message)
+            start(context,build,lambda manifest:finish_map_scene(context,manifest,'Editing Kit scenario'),'Building '+scenario_scene.leaf(scenario)+' with the Editing Kit Tool...')
+            _task.application_budget=.05
+            return
         def progress(message):
             global _message
             _message=message
         def done(manifest):
-            global _message,_error
+            global _message
             data=read_json(manifest)
-            yield from map_scene.import_scene(context,manifest,progress)
+            yield from scenario_scene.import_scene(context,manifest,progress)
             context.scene.halo_bridge.sky_scenario=data['scenario']
+            text=bpy.data.texts.get('HaloBridge scenario import report') or bpy.data.texts.new('HaloBridge scenario import report')
+            text.clear();text.write(scenario_scene.report(data))
             warnings=data.get('warnings',[])
-            report='Original map layout: '+data['scenario']+'\n\n'
-            report+='Terrain BSPs: '+str(data['decoded_bsps'])+'/'+str(data['expected_bsps'])+'\n'
-            report+='\n'.join(k+': '+str(v) for k,v in data.get('counts',{}).items())
-            report+='\n\nImport scope:\n'+'\n'.join(data.get('limitations',[]))
-            if warnings:report+='\n\nMissing or approximated elements:\n'+'\n'.join(warnings)
-            text=bpy.data.texts.get('HaloBridge map import report') or bpy.data.texts.new('HaloBridge map import report');text.clear();text.write(report)
-            _message='Imported original map base: '+str(len(data['placements']))+' mesh placements; terrain BSPs '+str(data['decoded_bsps'])+'/'+str(data['expected_bsps'])+'. '+str(len(warnings))+' warnings. See map import report.'
+            _message=('Imported '+scenario_scene.leaf(data['scenario'])+' from the Editing Kit: '+str(len(data['placements']))+' objects; BSPs with source geometry '
+                      +str(data['decoded_bsps'])+'/'+str(data['expected_bsps'])+'. '+str(len(warnings))+' notes. See HaloBridge scenario import report.')
             if data['decoded_bsps']!=data['expected_bsps']:
-                issues=['Incomplete import: '+str(data['decoded_bsps'])+'/'+str(data['expected_bsps'])+' terrain BSPs. This scene is not ready for Sapien preparation.']
-                issues.extend(w for w in warnings if w.startswith('BSP '))
-                record_failure(ValidationError(issues,'Map extraction'))
+                record_failure(ValidationError(['Some BSPs have no embedded source geometry: '+str(data['decoded_bsps'])+'/'+str(data['expected_bsps'])+' imported.']+[w for w in warnings if w.startswith('BSP ')],'Scenario import'))
                 bpy.ops.halo_bridge.report_diagnostics()
-        start(context,lambda cancel:jobs.extract_map_scene(cfg,name,cancel,progress),done,'Reading original map layout…')
+        start(context,lambda cancel:scenario_scene.extract(cfg,scenario,cancel,progress),done,'Reading Editing Kit scenario '+scenario_scene.leaf(scenario)+'...')
         _task.application_budget=.05
+
+
+class HBIndexScenario(Guard,bpy.types.Operator):
+    bl_idname='halo_bridge.index_scenario';bl_label='Index .scenario Assets'
+    bl_description='List every distinct object, instanced mesh and shader used by the chosen Editing Kit .scenario in the Indexed Asset List, without placing the level. Uses the same cached build as Import level from .scenario'
+    def run(self,context):
+        cfg=config(context);s=context.scene.halo_bridge
+        game=games.GAMES[s.game]
+        if not game.get('scenario_enabled'):raise RuntimeError('Editing Kit scenario indexing is not available for '+game['label']+'.')
+        if not s.kit or not (Path(cfg['kit'])/'tags').is_dir():raise RuntimeError('Choose the '+game['label']+' Editing Kit folder ('+game.get('kit','')+', it contains tool.exe and tags) first.')
+        scenario=scenario_scene.safe_tag(s.scenario_path)
+        base=read_json(Path(cfg['cache'])/'catalogue.json',{'version':1,'assets':[]})
+        def progress(message):
+            global _message
+            _message=message
+        def work(cancel):
+            if game.get('classic'):
+                built=classic_scenario.build_map(cfg,scenario,cancel,progress)
+                out=Path(cfg['cache'])/'indexes'/('scenario_'+built.stem+'.json')
+                result=jobs.helper('extractor',dict(operation='index',game=cfg['game'],map=str(built),output=str(out)),Path(cfg['cache'])/'jobs',cancel)
+                return classic_scenario.mark_rows(indexed_assets(result),scenario)
+            manifest=scenario_scene.extract(cfg,scenario,cancel,progress)
+            return scenario_scene.index_assets(manifest,cfg)
+        def done(rows):
+            global _catalogue,_message
+            before=list_snapshot(context);before['data']=copy.deepcopy(base);before['path']=str((Path(cfg['cache'])/'catalogue.json').resolve())
+            _catalogue=merge_assets(base,rows);refresh(context);remember_list(context,before)
+            kinds={}
+            for row in rows:kinds[row['kind']]=kinds.get(row['kind'],0)+1
+            _message=('Indexed '+str(len(rows))+' .scenario assets from '+scenario_scene.leaf(scenario)+': '
+                      +', '.join(str(v)+' '+{'scenery':'scenery','model':'objects','instance':'instanced meshes','material':'shaders'}.get(k,k) for k,v in sorted(kinds.items()))+'.')
+        start(context,work,done,'Indexing Editing Kit scenario '+scenario_scene.leaf(scenario)+'...')
+
 
 class HBPreviewToggle(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.toggle_preview';bl_label='Preview On / Off';bl_options={'REGISTER','UNDO'}
@@ -885,32 +1043,34 @@ class HBPreviewToggle(Guard,bpy.types.Operator):
         context.scene.halo_bridge.preview_enabled=True
         selection_changed(context.scene.halo_bridge,context)
 
-class HBRepairMap(Guard,bpy.types.Operator):
-    bl_idname='halo_bridge.repair_map';bl_label='(Experimental) Repair incomplete map import'
-    bl_description='Retry the selected map extraction and add newly recovered pieces, preserving existing edits and intentional deletions'
-    def run(self,context):
-        cfg=config(context);name=context.scene.halo_bridge.map_name
-        if not any(o.get('hb_map_reference') for o in context.scene.objects):raise RuntimeError('Import a map first.')
-        def progress(message):
-            global _message
-            _message=message
-        def done(manifest):
-            yield from map_scene.repair_scene(context,manifest,progress)
-        start(context,lambda cancel:jobs.extract_map_scene(cfg,name,cancel,progress),done,'Retrying incomplete map extraction...')
+class HBViewDistance(bpy.types.Operator):
+    bl_idname='halo_bridge.view_distance';bl_label='Remove Grey Blender Fog (View Distance)'
+    bl_description='Set every 3D View to Clip Start 0.1 and Clip End 999999 so whole levels are not cut off or greyed out in the distance'
+    def execute(self,context):
+        units=context.scene.unit_settings
+        scale=units.scale_length if units.system!='NONE' else 1.0
+        count=compat.clear_view_fog(bpy.data.screens,unit_scale=scale)
+        self.report({'INFO'},'View distance set on '+str(count)+' 3D View(s): Clip Start 0.1, Clip End 999999 (scene units).')
+        return {'FINISHED'}
 
 class HBGround(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.ground';bl_label='Create starter level shell template';bl_options={'REGISTER','UNDO'}
-    bl_description='Add a closed test-level shell with a ground surface and sky boundaries as a starting point for your map'
+    bl_description='Add a paintable Jungle terrain plane, a visible sky boundary wall and Master Chief for scale (not exported). Textures and the model are extracted from your 010_jungle.map'
     def run(self,context):
         cfg=export_config(context)
+        if cfg['game']!='halo3':raise RuntimeError('The starter template uses Halo 3 assets (Jungle terrain and Master Chief). Set Export to Sapien to Halo 3, or build your own floor for '+games.GAMES[cfg['game']]['label']+'.')
         mp=Path(cfg['maps'])/'010_jungle.map'
-        if not mp.is_file():raise RuntimeError('The textured starter template needs 010_jungle.map. Check the Halo 3 maps folder.')
-        asset=indexed_assets(dict(map=str(mp),assets=[dict(name='Jungle ground',tag='levels\\solo\\010_jungle\\shaders\\terrain\\terrain_000',kind='material',section=-1)]))[0]
-        def done(path):
+        if not mp.is_file():raise RuntimeError('The starter template needs 010_jungle.map for its terrain shader and Master Chief. Check the Halo 3 maps folder.')
+        ground,chief=indexed_assets(dict(map=str(mp),assets=[
+            dict(name='Jungle ground',tag='levels\\solo\\010_jungle\\shaders\\terrain\\terrain_000',kind='material',section=-1),
+            dict(name='masterchief',tag='objects\\characters\\masterchief\\masterchief',kind='model',section=-1)]))
+        def extract(cancel):
+            return jobs.extract(ground,cfg,cancel),jobs.extract(chief,cfg,cancel)
+        def done(paths):
             global _message
-            blender_ops.starter_ground(cfg,path)
-            _message='Created textured starter shell. Material Preview is enabled.'
-        start(context,lambda cancel:jobs.extract(asset,cfg,cancel),done,'Loading starter shell ground texture…')
+            blender_ops.starter_template(context,cfg,paths[0],chief,paths[1])
+            _message='Created the starter template: paintable terrain, sky boundary and Master Chief for scale (not exported). Material Preview and long view distance are on.'
+        start(context,extract,done,'Loading starter template terrain and Master Chief…')
 
 class HBScanShaders(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.scan_shaders';bl_label='Scan existing shaders'
@@ -923,7 +1083,7 @@ class HBScanShaders(Guard,bpy.types.Operator):
 
 class HBChooseShader(bpy.types.Operator):
     bl_idname='halo_bridge.choose_shader';bl_label='Search existing shaders'
-    bl_description='Search only the selected shader category, then assign your choice to the active material'
+    bl_description='Search every scanned shader by name or folder, then assign your choice to the active material'
     bl_property='choice'
     shader_kit:StringProperty(options={'HIDDEN','SKIP_SAVE'})
     shader_category:StringProperty(default='ALL',options={'HIDDEN','SKIP_SAVE'})
@@ -931,14 +1091,14 @@ class HBChooseShader(bpy.types.Operator):
     def invoke(self,context,event):
         settings=context.scene.halo_bridge
         self.shader_kit=games.destination(settings).kit
-        self.shader_category=settings.shader_level
+        self.shader_category='ALL'
         self.choice='NONE'
         context.window_manager.invoke_search_popup(self)
         return {'RUNNING_MODAL'}
     def execute(self,context):
         settings=context.scene.halo_bridge
-        if self.shader_kit!=games.destination(settings).kit or self.shader_category!=settings.shader_level:
-            self.report({'WARNING'},'The shader category changed. Open the shader picker again.')
+        if self.shader_kit!=games.destination(settings).kit:
+            self.report({'WARNING'},'The Editing Kit changed. Open the shader picker again.')
             return {'CANCELLED'}
         if self.choice=='NONE':return {'CANCELLED'}
         settings.shader_choice=self.choice
@@ -971,7 +1131,7 @@ def vehicle_items(operator,context):
 
 class HBFindVehicle(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.find_vehicle';bl_label='Find matching original vehicles'
-    bl_description='Find installed Halo 3 vehicle tags whose render model matches the selected imported object; select a variant afterward'
+    bl_description='Find vehicle tags in the destination Editing Kit whose render model matches the selected imported object; select a variant afterward'
     def run(self,context):
         obj=context.active_object
         if not obj or obj.type!='MESH':raise RuntimeError('Select the imported vehicle model in the 3D View first.')
@@ -987,8 +1147,8 @@ class HBFindVehicle(Guard,bpy.types.Operator):
         start(context,lambda cancel:jobs.helper('tags',dict(operation='resolve_vehicles',kit=cfg['kit'],sources=[source],output=str(out)),directory,cancel),done,'Finding matching Halo 3 vehicle tags...')
 
 class HBChooseVehicle(Guard,bpy.types.Operator):
-    bl_idname='halo_bridge.choose_vehicle';bl_label='Use original Halo 3 vehicle'
-    bl_description='Export the selected object as an original Halo 3 vehicle placement, keeping its game collision and behavior instead of static mesh geometry'
+    bl_idname='halo_bridge.choose_vehicle';bl_label='Use original vehicle tag'
+    bl_description='Export the selected object as an original vehicle placement, keeping its game collision and behavior instead of static mesh geometry'
     bl_property='choice';bl_options={'REGISTER','UNDO'}
     choice:EnumProperty(items=vehicle_items)
     target_name:StringProperty(options={'HIDDEN','SKIP_SAVE'})
@@ -1005,7 +1165,7 @@ class HBChooseVehicle(Guard,bpy.types.Operator):
         if not any(r['vehicle']==self.choice and r['render']==obj['hb_source_tag'] for r in rows):raise RuntimeError('Find matching vehicles for this model first.')
         obj['hb_vehicle_tag']=self.choice;obj['hb_vehicle_render']=obj['hb_source_tag']
         if not obj.get('hb_vehicle_id'):obj['hb_vehicle_id']=blender_ops.new_id()
-        _message=obj.name+' will export as an original Halo 3 vehicle: '+self.choice
+        _message=obj.name+' will export as an original vehicle: '+self.choice
 
 class HBVehicleStatic(bpy.types.Operator):
     bl_idname='halo_bridge.vehicle_static';bl_label='Use static mesh instead';bl_options={'REGISTER','UNDO'}
@@ -1056,19 +1216,16 @@ class HBCustomPaint(Guard,bpy.types.Operator):
         mat.node_tree.nodes.active=node
         if obj.mode!='TEXTURE_PAINT':bpy.ops.object.mode_set(mode='TEXTURE_PAINT')
         paint=context.tool_settings.image_paint;paint.mode='IMAGE';paint.canvas=node.image
-        brush=bpy.data.brushes.get('HaloBridge Texture Draw') or bpy.data.brushes.new('HaloBridge Texture Draw',mode='TEXTURE_PAINT')
-        paint.brush=brush;brush.blend='MIX'
-        unified=context.tool_settings.unified_paint_settings
-        if self.node_name=='Paint Mask':
-            palette=((1,0,0),(0,1,0),(0,0,1),(1,1,1),(0,0,0))
-            color=palette[self.paint_channel] if self.paint_channel>=0 else {'GRASS':(0,0,0),'ROCK':(1,0,0),'DIRT':(0,1,0)}[self.layer]
-            brush.color=color
-            if unified.use_unified_color:unified.color=color
         for area in context.screen.areas:
             if area.type=='VIEW_3D':
                 area.spaces.active.shading.type='MATERIAL'
-                with context.temp_override(area=area):
-                    bpy.ops.wm.tool_set_by_id(name='builtin_brush.Draw')
+                compat.draw_tool(context,area)
+        # Blender 4.3+ brushes are assets; compat picks a mix-blend draw brush on every version.
+        brush=compat.texture_paint_brush(context,paint,'HaloBridge Texture Draw')
+        if self.node_name=='Paint Mask':
+            palette=((1,0,0),(0,1,0),(0,0,1),(1,1,1),(0,0,0))
+            color=palette[self.paint_channel] if self.paint_channel>=0 else {'GRASS':(0,0,0),'ROCK':(1,0,0),'DIRT':(0,1,0)}[self.layer]
+            compat.set_paint_color(context,paint,brush,color)
 
 
 class HBCustomPack(Guard,bpy.types.Operator):
@@ -1159,6 +1316,43 @@ class HBChooseSky(bpy.types.Operator):
         s.sky_scenario=self.choice if self.choice!='AUTO' else 'levels\\multi\\deadlock\\deadlock'
         return {'FINISHED'}
 
+class HBChooseGameSky(Guard,bpy.types.Operator):
+    bl_idname='halo_bridge.choose_game_sky';bl_label='Choose sky'
+    bl_description='Place the chosen sky model in the Sapien Sky collection. Preparation rebuilds it as a sky for the Sapien destination with converted textures; resize or move it in Blender if needed'
+    bl_property='choice'
+    choice:EnumProperty(items=lambda self,context:skies.foreign_items(context.scene.halo_bridge,context) if context else [])
+    def run(self,context):
+        s=context.scene.halo_bridge
+        if self.choice=='NONE':return
+        game=skies.sky_game(s);profile=games.profile(s,game)
+        cfg=dict(config(context),**{k:bpy.path.abspath(v) if k in ('kit','cache','maps') else v for k,v in profile.items()})
+        asset=next((a for a in skies.catalogue_skies(s,game) if a['id']==self.choice),None)
+        if asset is None:raise RuntimeError('That sky is no longer in the '+games.GAMES[game]['label']+' asset list. Index its map again.')
+        stop_preview(context)
+        def done(path):
+            global _message
+            obj=sky_export.place(context,asset,path,cfg)
+            _message='Sapien sky: '+asset['name']+' from '+games.GAMES[game]['label']+'. It is in the Sapien Sky collection and is rebuilt as a converted sky when you prepare the level.'
+            context.view_layer.objects.active=obj
+        start(context,lambda cancel:jobs.extract(asset,cfg,cancel),done,'Extracting sky '+asset['name']+'…',undo=True)
+
+class HBSetSkyGame(bpy.types.Operator):
+    bl_idname='halo_bridge.set_sky_game';bl_label='Sky game'
+    bl_description='Game to take the Sapien sky from'
+    bl_property='game'
+    game:EnumProperty(items=skies.GAME_ITEMS)
+    def execute(self,context):
+        context.scene.halo_bridge.sky_game=self.game
+        return {'FINISHED'}
+
+class HBRemoveGameSky(Guard,bpy.types.Operator):
+    bl_idname='halo_bridge.remove_game_sky';bl_label='Remove sky object'
+    bl_description='Delete the converted sky object from the Sapien Sky collection'
+    def run(self,context):
+        global _message
+        for obj in [o for o in context.scene.objects if o.get(sky_export.PROPERTY)]:bpy.data.objects.remove(obj,do_unlink=True)
+        _message='Removed the sky object.'
+
 class HBRefreshSkies(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.refresh_skies';bl_label='Scan for map skies'
     bl_description='Scan installed Editing Kit scenarios for usable sky references; includes maps beyond the current asset index'
@@ -1224,11 +1418,13 @@ def prepare_button_text():
 _pending_prepare_warning=None
 
 def preparation_warnings(context,cfg):
+    original_scenery.reset_cache()
+    original_scenery.plan(context.scene,cfg)
     blockers=invisible_blocks.plan(context.scene,cfg)
     vehicle_placements=vehicles.plan(context.scene,cfg)
     warnings=geometry_export.warnings(context.scene)
     if blockers:warnings.append(str(len(blockers))+' invisible block(s) will use their original Halo 3 scenery and collision tags. Their preview materials are not required or exported.')
-    if vehicle_placements:warnings.append(str(len(vehicle_placements))+' original Halo 3 vehicle(s) will be placed using their game tags. Vehicle physics and behavior come from the selected tag. Editable Colors materials are baked and applied to matching shader slots on a level-local vehicle copy.')
+    if vehicle_placements:warnings.append(str(len(vehicle_placements))+' original vehicle(s) will be placed using their game tags. Vehicle physics and behavior come from the selected tag. Editable Colors materials are baked and applied to matching shader slots on a level-local vehicle copy.')
     selected=[o for o in geometry_export.objects(context.scene) if not geometry_export.is_sky(o)]
     issues,_,_=export_review.inspect(selected,cfg)
     if issues:
@@ -1252,6 +1448,10 @@ def draw_review_actions(layout,token,enabled=True):
     op.token=token;op.accept=False
 
 
+def _can_popup():
+    # popup_menu without a real window (background mode) crashes Blender 5.2; the sidebar keeps the review.
+    return not bpy.app.background
+
 def confirm_map_warnings(context,cfg,error):
     global _pending_prepare_warning,_error,_message,_reported_issues
     # Reviewable limitations are not failed builds. Keep the decision available
@@ -1272,7 +1472,7 @@ def confirm_map_warnings(context,cfg,error):
         if len(error.issues)>8:layout.label(text='All '+str(len(error.issues))+' warnings are above the Prepare button.')
         layout.separator()
         draw_review_actions(layout,token)
-    context.window_manager.popup_menu(draw,title='Prepare for Sapien: review warnings',icon='ERROR')
+    if _can_popup():context.window_manager.popup_menu(draw,title='Prepare for Sapien: review warnings',icon='ERROR')
 
 class HBConfirmPrepare(Guard,bpy.types.Operator):
     bl_idname='halo_bridge.confirm_prepare';bl_label='Continue with warnings'
@@ -1332,7 +1532,8 @@ class HBPrepare(Guard,bpy.types.Operator):
                     for area in context.screen.areas:area.tag_redraw()
                     if bpy.ops.wm.redraw_timer.poll():bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP',iterations=1)
         def done(path):
-            global _message
+            global _message,_box_retry
+            _box_retry=0
             _message='Ready: '+path;prepare_status('Finished. Level prepared for Sapien.')
             issues=cfg.get('compiler_warnings',[])
             if issues:
@@ -1357,8 +1558,9 @@ class HBPrepare(Guard,bpy.types.Operator):
         progress.stage(1,'Export current scene meshes')
         placements=geometry_export.export(cfg,out,progress=progress)
         report=bpy.data.texts.get('HaloBridge preparation report') or bpy.data.texts.new('HaloBridge preparation report')
-        report.clear();report.write('Current Blender meshes exported. Edits, transforms, modifiers and deletions are included.\nStructure geometry: '+cfg.get('structure_source','current scene')+'\nSky: '+cfg.get('sky_scenario','default')+'\n\n'+'\n'.join(warnings))
+        report.clear();report.write('Current Blender meshes exported. Edits, transforms, modifiers and deletions are included.\nStructure geometry: '+cfg.get('structure_source','current scene')+'\nSky: '+(('converted from '+cfg['sky_object']['name']) if cfg.get('sky_object') else cfg.get('sky_scenario','default'))+'\n\n'+'\n'.join(warnings))
         for name,route in cfg.get('collision_routes',{}).items():report.write(f'\n{name}: {route}')
+        if cfg.get('uv_repairs'):report.write('\n\nInvalid texture coordinates repaired (scene meshes unchanged):\n'+'\n'.join(cfg['uv_repairs']))
         start(context,lambda cancel:build.prepare(cfg,out,placements,cancel,progress),done,'Compiling current scene geometry...')
 
         _task.is_prepare=True
@@ -1528,216 +1730,226 @@ class HBPanel(bpy.types.Panel):
     def draw(self,context):
         l=self.layout;s=context.scene.halo_bridge
         row=l.row();row.enabled=_task is None;row.prop(s,'game')
-        l.label(text='Folders and Setup',icon='PREFERENCES')
-        box=l.box()
-        for n in ('kit','maps'):box.prop(s,n,text=games.GAMES[s.game]['label']+(' Editing Kit' if n=='kit' else ' .map Files'))
-        row=box.row();row.operator('halo_bridge.detect',depress=True);row.operator('halo_bridge.check_setup')
-        row=box.row();row.enabled=_task is None;row.operator('halo_bridge.ground',depress=True)
-        box.label(text='Choose .map file')
-        row=box.row(align=True);row.enabled=_task is None
-        row.prop(s,'map_name',text='')
-        row.operator('halo_bridge.choose_map',text='',icon='DOWNARROW_HLT')
-        box.operator('halo_bridge.index',depress=True)
-        row=box.row();row.enabled=_task is None
-        row.operator('halo_bridge.import_map_scene',depress=True)
-        box.operator('halo_bridge.repair_map')
-        box.operator('halo_bridge.center_map_origins')
-        box.prop(s,'advanced')
-        if s.advanced:
-            box.prop(s,'cache',text='Storage location')
-            box.label(text='Existing projects need their original records.')
-        l.prop(s,'follow_outliner')
-        row=l.row()
-        for redo,icon in ((False,'LOOP_BACK'),(True,'LOOP_FORWARDS')):
-            control=row.row();control.enabled=_task is None and history_available(redo)
-            control.operator('halo_bridge.list_history',text='Redo' if redo else 'Undo',icon=icon).redo=redo
-        l.prop(s,'asset_tab',expand=True)
-        l.label(text='Indexed Asset List',icon='ASSET_MANAGER')
-        grid=l.grid_flow(columns=3,align=True)
-        for category in ('vegetation','rocks','structures','water','materials'):grid.prop(s,'show_'+category,toggle=True)
-        l.prop(s,'filter_level')
-        search=l.box().row(align=True)
-        search.prop(s,'search',text='Search Assets',icon='VIEWZOOM')
-        clear=search.row(align=True);clear.enabled=bool(s.search)
-        clear.operator('halo_bridge.clear_search',text='',icon='X')
-        if s.asset_tab=='HIDDEN' and not any(a.hidden for a in s.assets):
-            box=l.box();box.separator(factor=2)
-            for line in ('Your Hidden Assets will show up','here when you [Hide] them.'):
-                row=box.row();row.alignment='CENTER';row.label(text=line)
-            box.separator(factor=2)
-        else:l.template_list('HB_UL_assets','',s,'assets',s,'active_index',rows=7)
-        visible=visibility_predicate(s)
-        l.label(text=str(sum(1 for item in s.assets if visible(item)))+' of '+str(len(s.assets))+' indexed assets shown')
-        on=s.preview_enabled
-        toggle=l.row();toggle.enabled=on or _task is None
-        toggle.operator('halo_bridge.toggle_preview',text='Preview Mode: ON' if on else 'Preview Mode: OFF',depress=on,icon='SEQUENCE_COLOR_04' if on else 'SEQUENCE_COLOR_01')
-        count=len(checked_ids(context))
-        row=l.row(align=True);row.operator('halo_bridge.check_assets',text='Select all').check=True
-        row.operator('halo_bridge.check_assets',text='Clear checks').check=False;row.label(text=str(count)+' checked')
-        row=l.row();row.enabled=_task is None and count>0
-        op=row.operator('halo_bridge.list_action',text='Unhide' if s.asset_tab=='HIDDEN' else 'Hide',icon='HIDE_ON' if s.asset_tab=='HIDDEN' else 'HIDE_OFF')
-        op.action='UNHIDE' if s.asset_tab=='HIDDEN' else 'HIDE'
-        row=l.row();row.enabled=_task is None and count>0
-        row.operator('halo_bridge.list_action',text='Delete checked from list',icon='TRASH').action='DELETE'
-        row=l.row();place=row.row();place.enabled=_task is None;place.operator('halo_bridge.place',depress=on,icon='ADD')
+        # Every section collapses except the warnings, preparation status and Prepare button.
+        _,box=compat.section(l,'hb_setup','Folders and Setup','PREFERENCES')
+        if box:
+            game=games.GAMES[s.game]
+            for n in ('kit','maps'):box.prop(s,n,text=game['label']+(' Editing Kit' if n=='kit' else ' .map Files'))
+            row=box.row();row.operator('halo_bridge.detect',depress=True);row.operator('halo_bridge.check_setup')
+            row=box.row();row.enabled=_task is None;row.operator('halo_bridge.ground',depress=True)
+            box.operator('halo_bridge.view_distance',icon='HIDE_OFF')
+            if game.get('scenario_enabled'):
+                level=box.box();level.label(text='Import level from .scenario (Recommended)',icon='WORLD_DATA')
+                row=level.row(align=True);row.enabled=_task is None
+                row.prop(s,'scenario_path',text='')
+                row.operator('halo_bridge.choose_scenario',text='',icon='DOWNARROW_HLT')
+                row=level.row();row.enabled=_task is None;row.scale_y=1.2
+                row.operator('halo_bridge.import_scenario',icon='IMPORT',depress=True)
+                row=level.row();row.enabled=_task is None
+                row.operator('halo_bridge.index_scenario',icon='ASSET_MANAGER',depress=True)
+                note=('Placements from the kit tags; Reach geometry from the matching .map.' if s.game=='reach'
+                      else 'The kit\'s Tool builds a map from the tags first.' if game.get('classic')
+                      else 'Reads the level tags directly. Textures from the matching .map.')
+                level.label(text=note,icon='INFO')
+            maps=box.box();maps.label(text='Import entire .map',icon='FILE_BLEND')
+            maps.label(text='Choose .map file')
+            row=maps.row(align=True);row.enabled=_task is None
+            row.prop(s,'map_name',text='')
+            row.operator('halo_bridge.choose_map',text='',icon='DOWNARROW_HLT')
+            row=maps.row();row.enabled=_task is None
+            row.operator('halo_bridge.import_map_scene',depress=True)
+            row=maps.row();row.enabled=_task is None
+            row.operator('halo_bridge.index',icon='ASSET_MANAGER',depress=True)
+            box.operator('halo_bridge.center_map_origins')
+            box.prop(s,'advanced')
+            if s.advanced:
+                box.prop(s,'cache',text='Storage location')
+                box.label(text='Existing projects need their original records.')
+        _,assets=compat.section(l,'hb_assets','Indexed Asset List','ASSET_MANAGER')
+        if assets:
+            assets.prop(s,'follow_outliner')
+            row=assets.row()
+            for redo,icon in ((False,'LOOP_BACK'),(True,'LOOP_FORWARDS')):
+                control=row.row();control.enabled=_task is None and history_available(redo)
+                control.operator('halo_bridge.list_history',text='Redo' if redo else 'Undo',icon=icon).redo=redo
+            row=assets.row(align=True);row.prop(s,'asset_tab',expand=True)
+            grid=assets.grid_flow(columns=3,align=True)
+            for category in ('vegetation','rocks','structures','water','materials'):grid.prop(s,'show_'+category,toggle=True)
+            assets.prop(s,'filter_level')
+            row=assets.row(align=True);row.prop(s,'filter_source',expand=True)
+            width=max(24,int(context.region.width/7)-6)
+            for key in ('map','scenario'):
+                if s.filter_source in ('ALL',key.upper()):
+                    note=assets.column(align=True);note.scale_y=.8
+                    for line in textwrap.wrap(SOURCE_SUMMARIES[key],width=width):note.label(text=line)
+            search=assets.box().row(align=True)
+            search.prop(s,'search',text='Search Assets',icon='VIEWZOOM')
+            clear=search.row(align=True);clear.enabled=bool(s.search)
+            clear.operator('halo_bridge.clear_search',text='',icon='X')
+            if s.asset_tab=='HIDDEN' and not any(a.hidden for a in s.assets):
+                empty=assets.box();empty.separator(factor=2)
+                for line in ('Your Hidden Assets will show up','here when you [Hide] them.'):
+                    row=empty.row();row.alignment='CENTER';row.label(text=line)
+                empty.separator(factor=2)
+            else:assets.template_list('HB_UL_assets','',s,'assets',s,'active_index',rows=7)
+            visible=visibility_predicate(s)
+            assets.label(text=str(sum(1 for item in s.assets if visible(item)))+' of '+str(len(s.assets))+' indexed assets shown')
+            on=s.preview_enabled
+            toggle=assets.row();toggle.enabled=on or _task is None
+            toggle.operator('halo_bridge.toggle_preview',text='Preview Mode: ON' if on else 'Preview Mode: OFF',depress=on,icon=compat.icon('STRIP_COLOR_04','SEQUENCE_COLOR_04') if on else compat.icon('STRIP_COLOR_01','SEQUENCE_COLOR_01'))
+            count=len(checked_ids(context))
+            row=assets.row(align=True);row.operator('halo_bridge.check_assets',text='Select all').check=True
+            row.operator('halo_bridge.check_assets',text='Clear checks').check=False;row.label(text=str(count)+' checked')
+            row=assets.row();row.enabled=_task is None and count>0
+            op=row.operator('halo_bridge.list_action',text='Unhide' if s.asset_tab=='HIDDEN' else 'Hide',icon='HIDE_ON' if s.asset_tab=='HIDDEN' else 'HIDE_OFF')
+            op.action='UNHIDE' if s.asset_tab=='HIDDEN' else 'HIDE'
+            row=assets.row();row.enabled=_task is None and count>0
+            row.operator('halo_bridge.list_action',text='Delete checked from list',icon='TRASH').action='DELETE'
+            row=assets.row();place=row.row();place.enabled=_task is None;place.operator('halo_bridge.place',depress=s.preview_enabled,icon='ADD')
         active=context.active_object
         if active and active.get('hb_parts_path'):
-            parts=l.box();parts.label(text='Model Parts and Variants',icon='OUTLINER_OB_MESH')
-            parts.label(text='Toggle parts; their positions stay unchanged.')
-            choices=model_parts.choices(active);enabled=model_parts.enabled(active)
-            opened=set(json.loads(active.get('hb_parts_open','[]')))
-            for region in dict.fromkeys(value[0] for value in choices.values()):
-                group={key:value for key,value in choices.items() if value[0]==region}
-                row=parts.row(align=False);row.enabled=_task is None
-                arrow=row.row();arrow.ui_units_x=1.3
-                op=arrow.operator('halo_bridge.model_region_expand',text='',icon='TRIA_DOWN' if region in opened else 'TRIA_RIGHT');op.region=region
-                row.separator(factor=.5)
-                check=row.row();check.ui_units_x=1.3
-                op=check.operator('halo_bridge.model_part_toggle',text='',icon='CHECKBOX_HLT' if set(group)<=enabled else 'CHECKBOX_DEHLT');op.region=region;op.choice=''
-                row.label(text=region)
-                if region in opened:
-                    for key,value in group.items():
-                        row=parts.row();row.enabled=_task is None
-                        op=row.operator('halo_bridge.model_part_toggle',text='    '+value[1],icon='CHECKBOX_HLT' if key in enabled else 'CHECKBOX_DEHLT',emboss=False);op.choice=key;op.region=''
-            row=parts.row();row.enabled=_task is None and not active.get('hb_preview')
-            row.operator('halo_bridge.model_parts_separate',icon='UNLINKED').all_variants=False
-            row=parts.row();row.enabled=_task is None and not active.get('hb_preview')
-            row.operator('halo_bridge.model_parts_separate',text='Separate all parts and variants into objects',icon='OUTLINER_OB_MESH').all_variants=True
-            if active.get('hb_preview'):parts.label(text='Place first to select individual pieces.',icon='INFO')
-        root=l;l=root.box();l.label(text='Selected Asset',icon='OBJECT_DATA')
-        try:material_selected=selected(context)['kind']=='material'
-        except Exception:material_selected=False
-        material_target=context.active_object
-        if material_target and material_target.get('hb_preview'):
-            material_target=s.preview_previous_object
-        has_material_target=material_target is not None and material_target.type=='MESH' and not material_target.get('hb_preview')
-        l.label(text='Material only',icon='MATERIAL')
-        apply=l.row();apply.enabled=_task is None and material_selected and has_material_target
-        apply.operator('halo_bridge.place',text='Apply material to selected object').apply_material=True
-        if not material_selected:l.label(text='Choose a material in the Asset List.',icon='INFO')
-        elif not has_material_target:l.label(text='Select a mesh in the 3D View.',icon='INFO')
-        try:
-            asset=selected(context)
-            status='Exports the current mesh as static geometry with generated collision.' if asset['kind']=='model' else asset.get('status','')
-            for line in textwrap.wrap(status,width=44):l.label(text=line)
-            l.label(text='Map: '+asset['level'])
-            if asset.get('section',-1)>=0:l.label(text=asset['tag'].rsplit('\\',1)[-1]+' / section '+str(asset['section']))
-            icon_id=asset_icons().get(asset['id'],0)
-            if icon_id:l.template_icon(icon_value=icon_id,scale=6)
-        except Exception:pass
-        try:_,reason=replacement_target(context,selected(context))
-        except Exception:reason='Choose an asset in the list to use as the replacement.'
-        row=l.row();row.enabled=_task is None and not reason
-        op=row.operator('halo_bridge.place',text='Swap selected object(s) to selected index asset');op.replace_selected=True
-        if reason:
-            for line in textwrap.wrap(reason,width=max(24,int(context.region.width/7)-6)):l.label(text=line)
+            _,parts=compat.section(l,'hb_parts','Model Parts and Variants','OUTLINER_OB_MESH')
+            if parts:
+                parts.label(text='Toggle parts; their positions stay unchanged.')
+                choices=model_parts.choices(active);enabled=model_parts.enabled(active)
+                opened=set(json.loads(active.get('hb_parts_open','[]')))
+                for region in dict.fromkeys(value[0] for value in choices.values()):
+                    group={key:value for key,value in choices.items() if value[0]==region}
+                    row=parts.row(align=False);row.enabled=_task is None
+                    arrow=row.row();arrow.ui_units_x=1.3
+                    op=arrow.operator('halo_bridge.model_region_expand',text='',icon='TRIA_DOWN' if region in opened else 'TRIA_RIGHT');op.region=region
+                    row.separator(factor=.5)
+                    check=row.row();check.ui_units_x=1.3
+                    op=check.operator('halo_bridge.model_part_toggle',text='',icon='CHECKBOX_HLT' if set(group)<=enabled else 'CHECKBOX_DEHLT');op.region=region;op.choice=''
+                    row.label(text=region)
+                    if region in opened:
+                        for key,value in group.items():
+                            row=parts.row();row.enabled=_task is None
+                            op=row.operator('halo_bridge.model_part_toggle',text='    '+value[1],icon='CHECKBOX_HLT' if key in enabled else 'CHECKBOX_DEHLT',emboss=False);op.choice=key;op.region=''
+                row=parts.row();row.enabled=_task is None and not active.get('hb_preview')
+                row.operator('halo_bridge.model_parts_separate',icon='UNLINKED').all_variants=False
+                row=parts.row();row.enabled=_task is None and not active.get('hb_preview')
+                row.operator('halo_bridge.model_parts_separate',text='Separate all parts and variants into objects',icon='OUTLINER_OB_MESH').all_variants=True
+                if active.get('hb_preview'):parts.label(text='Place first to select individual pieces.',icon='INFO')
+        _,box=compat.section(l,'hb_selected','Selected Asset','OBJECT_DATA')
+        if box:
+            try:material_selected=selected(context)['kind']=='material'
+            except Exception:material_selected=False
+            material_target=context.active_object
+            if material_target and material_target.get('hb_preview'):
+                material_target=s.preview_previous_object
+            has_material_target=material_target is not None and material_target.type=='MESH' and not material_target.get('hb_preview')
+            box.label(text='Material only',icon='MATERIAL')
+            apply=box.row();apply.enabled=_task is None and material_selected and has_material_target
+            apply.operator('halo_bridge.place',text='Apply material to selected object').apply_material=True
+            if not material_selected:box.label(text='Choose a material in the Asset List.',icon='INFO')
+            elif not has_material_target:box.label(text='Select a mesh in the 3D View.',icon='INFO')
+            try:
+                asset=selected(context)
+                status='Exports the current mesh as static geometry with generated collision.' if asset['kind']=='model' else asset.get('status','')
+                for line in textwrap.wrap(status,width=44):box.label(text=line)
+                box.label(text=('.scenario: ' if asset.get('source')=='scenario' else '.map: ')+asset['level'])
+                if asset.get('section',-1)>=0:box.label(text=asset['tag'].rsplit('\\',1)[-1]+' / section '+str(asset['section']))
+                icon_id=asset_icons().get(asset['id'],0)
+                if icon_id:box.template_icon(icon_value=icon_id,scale=6)
+            except Exception:pass
+            try:_,reason=replacement_target(context,selected(context))
+            except Exception:reason='Choose an asset in the list to use as the replacement.'
+            row=box.row();row.enabled=_task is None and not reason
+            op=row.operator('halo_bridge.place',text='Swap selected object(s) to selected index asset');op.replace_selected=True
+            if reason:
+                for line in textwrap.wrap(reason,width=max(24,int(context.region.width/7)-6)):box.label(text=line)
+            active=context.active_object
+            if active and active.type=='MESH' and games.native(active) and games.GAMES[s.export_target]['sapien_enabled'] and active.get('hb_source_tag'):
+                box.separator();box.label(text='Original '+games.GAMES[s.export_target]['label']+' Vehicle',icon='AUTO')
+                for line in textwrap.wrap('3D object: '+active.name,width=max(24,int(context.region.width/7)-6)):box.label(text=line)
+                row=box.row();row.enabled=_task is None;row.operator('halo_bridge.find_vehicle')
+                if json.loads(active.get('hb_vehicle_matches','[]')):
+                    row=box.row();row.enabled=_task is None;row.operator('halo_bridge.choose_vehicle',icon='VIEWZOOM')
+                if active.get('hb_vehicle_tag'):
+                    for line in textwrap.wrap('Vehicle: '+active['hb_vehicle_tag'],width=max(24,int(context.region.width/7)-6)):box.label(text=line)
+                    box.operator('halo_bridge.vehicle_static')
         active=context.active_object
-        if active and active.type=='MESH' and active.get('hb_game','halo3')=='halo3' and active.get('hb_source_tag'):
-            l.separator();l.label(text='Original Halo 3 Vehicle',icon='AUTO')
-            for line in textwrap.wrap('3D object: '+active.name,width=max(24,int(context.region.width/7)-6)):l.label(text=line)
-            row=l.row();row.enabled=_task is None;row.operator('halo_bridge.find_vehicle')
-            if json.loads(active.get('hb_vehicle_matches','[]')):
-                row=l.row();row.enabled=_task is None;row.operator('halo_bridge.choose_vehicle',icon='VIEWZOOM')
-            if active.get('hb_vehicle_tag'):
-                for line in textwrap.wrap('Vehicle: '+active['hb_vehicle_tag'],width=max(24,int(context.region.width/7)-6)):l.label(text=line)
-                l.operator('halo_bridge.vehicle_static')
-        l=root
-        l.separator();l=root.box();l.label(text='Materials and Shaders',icon='MATERIAL')
-        active=context.active_object
-        active_material=active.active_material if active and active.type=='MESH' else None
-        if active_material:
-            l.label(text='Object: '+active.name,icon='OBJECT_DATA')
-            l.label(text='Active material: '+active_material.name,icon='MATERIAL')
-            if active_material.users>1:l.label(text='Shared material: affects other users.',icon='INFO')
-        else:l.label(text='Select an object with a material.',icon='INFO')
-        l.separator()
-        l.operator('halo_bridge.scan_shaders',icon='FILE_REFRESH')
-        l.prop(s,'shader_manual')
-        if s.shader_manual:l.prop(s,'shader_path')
-        else:
-            l.label(text='Filter by level / category');l.prop(s,'shader_level',text='')
-            choices=shader_choices.items(s,context)
-            l.label(text=str(max(0,len(choices)-1))+' shaders in this category')
-            shader=s.shader_choice
-            label=shader.replace('\\','/').rsplit('/',1)[-1] if shader and shader!='NONE' else 'Choose an existing shader...'
-            row=l.row();row.enabled=len(choices)>1
-            row.operator('halo_bridge.choose_shader',text=label,icon='VIEWZOOM')
-        row=l.row();row.enabled=active_material is not None and _task is None
-        row.operator('halo_bridge.shader',icon='CHECKMARK')
-        l.label(text='Sets the shader used in Sapien.')
-        if active and active.type=='MESH' and active.active_material and not vehicles.selected_vehicle(active):
-            l=root.box();l.label(text='Collision',icon='MOD_PHYSICS');l.prop(active,'hb_static_collision',text='Object collision')
-            if len(active.material_slots)>1:
-                l.template_list('MATERIAL_UL_mats','hb_collision',active,'material_slots',active,'active_material_index',rows=3)
-            l.label(text=active.active_material.name,icon='MATERIAL')
-            l.prop(active.active_material,'hb_collision_mode',text='Collision')
-            l.label(text='Shared materials affect all objects using them.')
-        edit=root.box();edit.label(text='Editable Materials (Experimental)',icon='MATERIAL')
-        target=context.active_object;material=target.active_material if target and target.type=='MESH' else None
-        row=edit.row();row.enabled=_task is None and material is not None and not target.get('hb_preview') if target else False
-        row.operator('halo_bridge.read_shader_textures')
-        row=edit.row();row.enabled=_task is None and material is not None and not target.get('hb_preview') if target else False
-        if not vehicles.selected_vehicle(target):
-            row.operator('halo_bridge.custom_material',text='Create paintable terrain').mode='terrain'
-        row.operator('halo_bridge.custom_material',text='Create editable colors').mode='colors'
-        if material and material.get('hb_custom_shader'):
-            edit.label(text='Paint exports on this vehicle placement.' if vehicles.selected_vehicle(target) else 'Bakes to custom Halo 3 textures on preparation.')
-            edit.prop(material,'hb_resolution',text='Texture resolution')
-            edit.prop(material,'hb_show_repeat',text='Repeat settings',icon='TRIA_DOWN' if material.hb_show_repeat else 'TRIA_RIGHT',emboss=False)
-            layers=json.loads(material.get('hb_layers','[]'))
-            names=[node.name for node in material.node_tree.nodes if node.type=='TEX_IMAGE'] if layers else ['Grass','Rock','Dirt','Base Texture','Paint Mask','Grass Normal','Rock Normal','Dirt Normal','Normal Texture']
-            for name in names:
-                node=material.node_tree.nodes.get(name)
-                if not node:continue
-                if layers and name=='Paint Mask':continue
-                label={'Grass':'Shader 1','Rock':'Shader 2','Dirt':'Shader 3'}.get(name,name)
-                edit.label(text=label+(' — '+node.label if node.label and node.label!=name else ''))
-                row=edit.row(align=True);row.template_ID(node,'image')
-                row.operator('halo_bridge.custom_load_image',text='',icon='FILE_FOLDER').node_name=name
-                if name!='Paint Mask':row.operator('halo_bridge.custom_paint',text='',icon='BRUSH_DATA').node_name=name
-                tiling=material.node_tree.nodes.get(name+' Tiling')
-                if tiling and material.hb_show_repeat:
-                    row=edit.row(align=True)
-                    for axis in range(3):row.prop(tiling.inputs[1],'default_value',index=axis,text='XYZ'[axis])
-            if material['hb_custom_shader']=='terrain':
-                for i,name in enumerate(layers or ['Shader 1','Shader 2','Shader 3']):
-                    op=edit.operator('halo_bridge.custom_paint',text='Paint '+name)
-                    if layers:op.paint_channel=i
-                    else:op.layer=('GRASS','ROCK','DIRT')[i]
-                if layers:edit.operator('halo_bridge.custom_paint',text='Paint original blend').paint_channel=4
+        _,box=compat.section(l,'hb_materials','Shaders','MATERIAL')
+        if box:
+            active_material=active.active_material if active and active.type=='MESH' else None
+            if active_material:
+                box.label(text='Object: '+active.name,icon='OBJECT_DATA')
+                box.label(text='Active material: '+active_material.name,icon='MATERIAL')
+                if active_material.users>1:box.label(text='Shared material: affects other users.',icon='INFO')
+            else:box.label(text='Select an object with a material.',icon='INFO')
+            box.separator()
+            box.operator('halo_bridge.scan_shaders',icon='FILE_REFRESH')
+            box.prop(s,'shader_manual')
+            if s.shader_manual:box.prop(s,'shader_path')
             else:
-                edit.label(text=material.get('hb_mask_source','Color mask'))
-                for index in range(1,5):edit.prop(material.node_tree.nodes['Color '+str(index)].inputs[2],'default_value',text='Color '+str(index))
-                edit.label(text='Mask channels R / G / B / Alpha control colors 1–4.')
-            edit.operator('halo_bridge.custom_pack',icon='PACKAGE')
-            edit.label(text='Use one UV tile (0–1). Original tags stay unchanged.')
-        l=root.box();l.label(text='Sapien Sky (Experimental)',icon='WORLD')
-        l.label(text='Choose the sky used in Sapien.')
-        selected_sky=s.sky_selected if s.sky_selected!='AUTO' else (s.sky_choice or 'AUTO')
-        label=selected_sky.replace('\\','/').rsplit('/',1)[-1] if selected_sky!='AUTO' else 'Original map / default sky'
-        row=l.row();row.enabled=_task is None;row.operator('halo_bridge.refresh_skies',icon='FILE_REFRESH')
-        row=l.row(align=True);row.enabled=_task is None
-        row.label(text='Sky:')
-        row.operator_menu_enum('halo_bridge.choose_sky','choice',text=label,icon='WORLD')
-        available=max(0,len(skies.items(s,context))-1)
-        l.label(text=str(available)+' map skies available' if available else 'Scan for map skies to populate this dropdown.',icon='INFO')
-        if selected_sky!='AUTO':
-            for line in textwrap.wrap('Selected: '+selected_sky,width=max(24,int(context.region.width/7)-6)):l.label(text=line)
-        l=root.box();l.label(text='(Experimental) Sapien Map Preparation',icon='SCENE_DATA')
-        l.prop(s,'export_target')
-        if s.game!=s.export_target:
-            l.label(text='Mixed-game meshes convert to the destination.')
+                choices=shader_choices.items(s,context)
+                shader=s.shader_choice
+                label=shader.replace('\\','/').rsplit('/',1)[-1] if shader and shader!='NONE' else 'Choose an existing shader...'
+                row=box.row();row.enabled=len(choices)>1
+                row.operator('halo_bridge.choose_shader',text=label,icon='VIEWZOOM')
+            row=box.row();row.enabled=active_material is not None and _task is None
+            row.operator('halo_bridge.shader',icon='CHECKMARK')
+            box.label(text='Sets the shader used in Sapien.')
+        if active and active.type=='MESH' and not vehicles.selected_vehicle(active):
+            _,box=compat.section(l,'hb_collision','Collision','MOD_PHYSICS')
+            if box:
+                box.prop(active,'hb_static_collision',text='Object collision')
+        _,edit=compat.section(l,'hb_editable','Editable Materials (Experimental)','BRUSH_DATA')
+        if edit:
+            draw_editable_materials(edit,context)
+        _,box=compat.section(l,'hb_sky','Sapien Sky (Experimental)','WORLD')
+        if box:
+            width=max(24,int(context.region.width/7)-6)
+            destination=games.destination(s).game
+            box.label(text='Choose the sky used in Sapien.')
+            row=box.row();row.enabled=_task is None
+            if s.get('sky_game') is None:row.operator_menu_enum('halo_bridge.set_sky_game','game',text='Game: '+games.GAMES[destination]['label'])
+            else:row.prop(s,'sky_game',text='Game')
+            if skies.kit_sky(s):
+                selected_sky=s.sky_selected if s.sky_selected!='AUTO' else (s.sky_choice or 'AUTO')
+                label=selected_sky.replace('\\','/').rsplit('/',1)[-1] if selected_sky!='AUTO' else 'Original map / default sky'
+                row=box.row();row.enabled=_task is None;row.operator('halo_bridge.refresh_skies',icon='FILE_REFRESH')
+                row=box.row(align=True);row.enabled=_task is None
+                row.label(text='Sky:')
+                row.operator_menu_enum('halo_bridge.choose_sky','choice',text=label,icon='WORLD')
+                available=max(0,len(skies.items(s,context))-1)
+                box.label(text=str(available)+' map skies available' if available else 'Scan for map skies to populate this dropdown.',icon='INFO')
+                if selected_sky!='AUTO':
+                    for line in textwrap.wrap('Selected: '+selected_sky,width=width):box.label(text=line)
+            else:
+                current=sky_export.sky_object(context.scene)
+                label=current.name.removeprefix('Sapien sky - ') if current else 'Choose a sky...'
+                row=box.row(align=True);row.enabled=_task is None
+                row.label(text='Sky:')
+                row.operator_menu_enum('halo_bridge.choose_game_sky','choice',text=label,icon='WORLD')
+                available=max(0,len(skies.foreign_items(s,context))-1)
+                game_label=games.GAMES[skies.sky_game(s)]['label']
+                if not available:
+                    for line in textwrap.wrap('Index a '+game_label+' .map or .scenario (switch Import game) to list its skies.',width=width):box.label(text=line,icon='INFO')
+                else:box.label(text=str(available)+' '+game_label+' skies indexed',icon='INFO')
+                for line in textwrap.wrap('Rebuilt as a '+games.GAMES[destination]['label']+' sky with converted textures. Lighting, fog and animated sky effects are not converted.',width=width):box.label(text=line)
+                if current:
+                    row=box.row();row.enabled=_task is None;row.operator('halo_bridge.remove_game_sky',icon='TRASH')
+                elif skies.sky_game(s)!=destination:
+                    box.label(text='No sky chosen: preparation will stop.',icon='ERROR')
+        _,box=compat.section(l,'hb_prepare','(Experimental) Sapien Map Preparation','SCENE_DATA')
+        if box:
+            box.prop(s,'export_target')
+            if s.game!=s.export_target:
+                box.label(text='Mixed-game meshes convert to the destination.')
         if s.export_target=='reach':
-            l.label(text='Reach Sapien export is not available yet.',icon='INFO')
-            l.label(text='Choose Halo 3 to prepare this scene.')
+            if box:
+                box.label(text='Reach Sapien export is not available yet.',icon='INFO')
+                box.label(text='Choose Halo 3 to prepare this scene.')
             return
-        l.prop(s,'skip_invalid')
-        l.label(text='Output Level Name (without .map)')
-        l.prop(s,'level',text='')
-        l.label(text='Current meshes: generated static collision.')
-        l.prop(s,'lighting')
-        l.prop(s,'open_sapien')
-        l=root
+        if box:
+            box.prop(s,'skip_invalid')
+            box.label(text='Output Level Name (without .map)')
+            box.prop(s,'level',text='')
+            box.label(text='Current meshes: generated static collision.')
+            box.prop(s,'lighting')
+            box.prop(s,'open_sapien')
         l.label(text='HaloBridge Warnings and Messages',icon='INFO')
         draw_messages(l,context)
         status=l.box();status.label(text='Map Preparation Status',icon='INFO')
@@ -1770,7 +1982,70 @@ class HBPanel(bpy.types.Panel):
         row.scale_y=1.3;row.operator('halo_bridge.prepare',text=prepare_button_text(),icon='EXPORT',depress=True)
         row=l.row();row.enabled=_task is None;row.scale_y=1.2;row.operator('halo_bridge.open',icon='PLAY',depress=True)
 
-classes=(HBCustomMaterial,HBCustomLoadImage,HBCustomPaint,HBCustomPack,HBReadShaderTextures,HBModelRegionExpand,HBModelPartToggle,HBModelPartsSeparate,HBChooseMap,HBFindVehicle,HBChooseVehicle,HBVehicleStatic,HBActivityLog,HBApplyExtracted,HBAsset,HBSettings,HBDetect,HBCheckSetup,HBScan,HBIndex,HBPlace,HBClearSearch,HBCheckAssets,HBListHistory,HBListAction,HBPlaceChecked,HBImportMapScene,HBRepairMap,HBPreviewToggle,HBGround,HBScanShaders,HBChooseShader,HBShader,HBChooseSky,HBRefreshSkies,HBPrepare,HBConfirmPrepare,HBOpen,HBResolve,HBCancel,HBDiagnostics,HBReportDiagnostics,HBSelectCollisionIssues,HBCenterMapOrigins,HB_UL_assets,HBMessages,HBMessagesPopover,HBPanel)
+
+def draw_editable_materials(edit,context):
+    """Editable material controls; each terrain shader layer is its own collapsible section."""
+    target=context.active_object;material=target.active_material if target and target.type=='MESH' else None
+    usable=_task is None and material is not None and not target.get('hb_preview') if target else False
+    row=edit.row();row.enabled=usable
+    row.operator('halo_bridge.read_shader_textures')
+    row=edit.row();row.enabled=usable
+    if not vehicles.selected_vehicle(target):
+        row.operator('halo_bridge.custom_material',text='Create paintable terrain').mode='terrain'
+    row.operator('halo_bridge.custom_material',text='Create editable colors').mode='colors'
+    if not (material and material.get('hb_custom_shader')):return
+    edit.label(text='Paint exports on this vehicle placement.' if vehicles.selected_vehicle(target) else 'Bakes to custom Halo 3 textures on preparation.')
+    edit.prop(material,'hb_resolution',text='Texture resolution')
+    edit.prop(material,'hb_show_repeat',text='Repeat settings',icon='TRIA_DOWN' if material.hb_show_repeat else 'TRIA_RIGHT',emboss=False)
+    nodes=material.node_tree.nodes
+    layers=json.loads(material.get('hb_layers','[]'))
+    shown=set()
+    def image_row(parent,name,label=None,paint=True):
+        node=nodes.get(name)
+        if not node or node.type!='TEX_IMAGE':return
+        shown.add(name)
+        parent.label(text=(label or name)+(' — '+node.label if node.label and node.label!=name else ''))
+        row=parent.row(align=True);row.template_ID(node,'image')
+        row.operator('halo_bridge.custom_load_image',text='',icon='FILE_FOLDER').node_name=name
+        if paint and name!='Paint Mask':row.operator('halo_bridge.custom_paint',text='',icon='BRUSH_DATA').node_name=name
+        tiling=nodes.get(name+' Tiling')
+        if tiling and material.hb_show_repeat:
+            row=parent.row(align=True)
+            for axis in range(3):row.prop(tiling.inputs[1],'default_value',index=axis,text='XYZ'[axis])
+    if material['hb_custom_shader']=='terrain':
+        # Layered Halo terrain has up to four shaders (blend channels R, G, B, A); the
+        # fallback terrain editor has three. Each one collapses to a header with its Paint button.
+        groups=[('Shader '+str(i+1),'Shader '+str(i+1),i,None) for i in range(len(layers))] if layers else \
+               [('Grass','Shader 1',0,'GRASS'),('Rock','Shader 2',1,'ROCK'),('Dirt','Shader 3',2,'DIRT')]
+        for node_name,title,index,legacy in groups:
+            node=nodes.get(node_name)
+            texture=node.label if node and node.label and node.label!=node_name else ''
+            header,body=compat.section(edit,'hb_layer_'+str(index),title+(' — '+texture if texture else ''),'TEXTURE',default_closed=True)
+            op=header.operator('halo_bridge.custom_paint',text='Paint '+title if header is body else 'Paint',icon='BRUSH_DATA')
+            if layers:op.paint_channel=index
+            else:op.layer=legacy
+            if body:
+                for suffix,label in (('',title),(' Detail',title+' detail'),(' Normal',title+' normal')):image_row(body,node_name+suffix,label)
+            else:
+                shown.update(node_name+suffix for suffix in ('',' Detail',' Normal'))
+        if layers:
+            image_row(edit,'Original Blend')
+            edit.operator('halo_bridge.custom_paint',text='Paint original blend').paint_channel=4
+        else:
+            image_row(edit,'Paint Mask',paint=False)
+        shown.add('Paint Mask')
+        for node in nodes:
+            if node.type=='TEX_IMAGE' and node.name not in shown:image_row(edit,node.name)
+    else:
+        for name in ('Base Texture','Paint Mask','Normal Texture'):image_row(edit,name)
+        edit.label(text=material.get('hb_mask_source','Color mask'))
+        for index in range(1,5):edit.prop(nodes['Color '+str(index)].inputs[2],'default_value',text='Color '+str(index))
+        edit.label(text='Mask channels R / G / B / Alpha control colors 1–4.')
+    edit.operator('halo_bridge.custom_pack',icon='PACKAGE')
+    edit.label(text='Use one UV tile (0–1). Original tags stay unchanged.')
+
+
+classes=(HBChooseScenario,HBImportScenario,HBIndexScenario,HBCustomMaterial,HBCustomLoadImage,HBCustomPaint,HBCustomPack,HBReadShaderTextures,HBModelRegionExpand,HBModelPartToggle,HBModelPartsSeparate,HBChooseMap,HBFindVehicle,HBChooseVehicle,HBVehicleStatic,HBActivityLog,HBApplyExtracted,HBAsset,HBSettings,HBDetect,HBCheckSetup,HBScan,HBIndex,HBPlace,HBClearSearch,HBCheckAssets,HBListHistory,HBListAction,HBPlaceChecked,HBImportMapScene,HBViewDistance,HBPreviewToggle,HBGround,HBScanShaders,HBChooseShader,HBShader,HBChooseSky,HBChooseGameSky,HBSetSkyGame,HBRemoveGameSky,HBRefreshSkies,HBPrepare,HBConfirmPrepare,HBOpen,HBResolve,HBCancel,HBDiagnostics,HBReportDiagnostics,HBSelectCollisionIssues,HBCenterMapOrigins,HB_UL_assets,HBMessages,HBMessagesPopover,HBPanel)
 
 @persistent
 def load_catalogue(_=None):
@@ -1796,7 +2071,7 @@ def register():
     for cls in classes:bpy.utils.register_class(cls)
     bpy.types.VIEW3D_HT_header.append(draw_message_header)
     bpy.types.Scene.halo_bridge=PointerProperty(type=HBSettings)
-    bpy.types.Object.hb_static_collision=EnumProperty(name='Static collision',items=[('AUTO','Automatic','Prefer matching original collision from the source Editing Kit, then use a box or mesh fallback'),('SURFACE','Mesh surfaces','Build collision from eligible material surfaces'),('BOX','Simple box','Use one solid bounding box around eligible geometry, including gaps inside it')],default='AUTO')
+    bpy.types.Object.hb_static_collision=EnumProperty(name='Static collision',items=[('AUTO','(Default) Automatic','Prefer matching original collision from the source Editing Kit, then use a box or mesh fallback'),('SURFACE','Mesh surfaces','Build collision from eligible material surfaces'),('BOX','Simple box','Use one solid bounding box around eligible geometry, including gaps inside it')],default='AUTO')
     bpy.types.Material.hb_show_repeat=BoolProperty(default=False)
     bpy.types.Material.hb_resolution=EnumProperty(items=[(str(n),str(n),'',n) for n in (512,1024,2048,4096)],get=lambda m:int(m.get('hb_bake_size',1024)),set=lambda m,n:m.__setitem__('hb_bake_size',n))
     bpy.types.Material.hb_collision_mode=EnumProperty(name='Export collision',description='Controls collision generated from this material during static scene export',items=[('AUTO','Automatic','Halo foliage shaders and explicit render-only materials do not generate collision; other surfaces remain collidable'),('SOLID','Collidable','Generate collision from these surfaces, including foliage'),('RENDER_ONLY','Render only (no collision)','Keep these surfaces visible but omit them from collision; useful for leaf cards and decorative foliage')],default='AUTO')
