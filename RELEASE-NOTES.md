@@ -1,4 +1,4 @@
-# HaloBridge v0.10.1 — scenario import fix
+# HaloBridge v0.10.1 — scenario import and test lighting fixes
 
 Import levels and assets from Halo: CE, Halo 2, Halo 3, Halo 3: ODST and Halo: Reach in Blender 4.0 to 5.2, straight from Editing Kit `.scenario` tags or MCC `.map` files, and prepare a Halo 3 or ODST Sapien test level that mixes assets (and skies) from all of them.
 
@@ -13,6 +13,7 @@ Expand Assets below to download the installer. GitHub's automatic source archive
 
 - **`.scenario` imports no longer stop with "JMS triangle uses a missing material".** Some original source files contain faces that were never given a material (070_waste's cinematic sky has 1,498 of them). These faces are now skipped and listed in the import report, and the rest of the level imports. 070_waste now imports with 13/13 BSPs, 4,609 placements and all 5 skies.
 - **BSP pieces are no longer dropped for a few unassigned faces.** Only those faces are left out, so geometry missing from earlier imports comes back. Cached scenario imports rebuild once.
+- **Preparation no longer fails with "ASSERTION FAILED … faux_material.cpp … parameter_success".** Halo Tool's test lighting cannot process some animated shaders (for example 070_waste's sky waterfall, `waterfall.shader_custom`). The level is now kept without test lighting, and the preparation report names the shader and the objects using it.
 
 Updating from 0.10.0: remove the old add-on, restart Blender, then install the new ZIP.
 

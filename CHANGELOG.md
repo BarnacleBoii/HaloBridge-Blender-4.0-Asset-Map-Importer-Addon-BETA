@@ -1,5 +1,6 @@
-## 0.10.1 — scenario import fix
+## 0.10.1 — scenario import and test lighting fixes
 
+- **Fixed: preparation failing with "ASSERTION FAILED … faux_material.cpp … parameter_success".** Halo Tool's test lighting cannot evaluate some animated shaders, such as 070_waste's sky waterfall (`waterfall.shader_custom`), and crashed, which rolled back the whole build. The level is now kept without test lighting, and the preparation report names the shader and the Blender objects using it. Verified with a test level using that shader; the other waterfall shaders and converted Reach shaders (including alpha-tested ones) light normally.
 - **Fixed: "JMS triangle uses a missing material" stopped `.scenario` imports** (for example `levels\solo\070_waste\070_waste`, whose cinematic sky has 1,498 faces with no material). Faces that have no material in the original source file are now skipped and listed in the import report; the rest of the level imports. Tested with 070_waste: 13/13 BSPs, 4,609 placements, all 5 skies.
 - **Fixed: BSP pieces dropped for one unassigned face.** A BSP source object with a few faces without a material was skipped entirely; now only those faces are left out, so geometry missing from earlier imports (about 20 pieces in 070_waste) comes back. Cached scenario imports are rebuilt once.
 
