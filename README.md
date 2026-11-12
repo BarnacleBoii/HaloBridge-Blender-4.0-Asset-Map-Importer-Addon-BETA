@@ -2,37 +2,30 @@
 
 # HaloBridge — Blender Halo Level / Asset Importer + Sapien Level Preparation (Beta)
 
-It's more for Halo 3 Map Creators who wanna just get going quickly and start placing assets.
+Made for Halo 3 Map Creators who wanna get going quickly and start placing/editing halo assets.
 
 HaloBridge is a Blender add-on that brings Halo levels and assets from **Halo: CE, Halo 2, Halo 3, Halo 3: ODST and Halo: Reach** into Blender, fully textured, and then turns your Blender scene into a **Halo 3 (or ODST) Sapien test level** with one button. You can import a whole level from its Editing Kit `.scenario`, import an entire MCC `.map`, or browse a searchable list of every model, piece of scenery and material in a map and place exactly the ones you want. Assets from different games can be mixed in the same level, and a sky from any of these games can become your level's sky.
 
-The Main reason for this mod tool was to eliminate *time-wasting procedures like having to constantly search and type out every file path* This Tool places everything in *clickable-dropdown-menus. *With HaloBridge After you click [Detect Folders], you don't need to go in and type out every single asset/material file path.
-
+The Main reason for this mod tool was to make map making faster, eliminate *time-wasting procedures like having to constantly search and type out every file path* This Tool places everything in *clickable-dropdown-menus. *With HaloBridge After you click [Detect Folders], you don't need to go in and type out every single asset/material file path.
 (Coded with Claude Ai, guided by user input)
-
-**v0.10.1 · Beta preview · Windows x64 · Blender 4.0 to 5.2**
-
-**Viewport scale:** Halo:MCC Assets uses a 100× scale compared to blenders scale. For large scenes, adjust Clip Start and End to the area you are editing. An extreme near/far range can worsen depth flickering. See [viewport troubleshooting](docs/TROUBLESHOOTING.md#flickering-surfaces-or-a-grey-cut-off-view).
-
-**[Releases and Downloads](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases)** · **[Installation](docs/INSTALLATION.md)** · **[First map tutorial](docs/FIRST-MAP.md)** · **[Feature guide](docs/FEATURES.md)** · **[Troubleshooting](docs/TROUBLESHOOTING.md)**
-
-## Releases and Downloads
-
-Latest Version: v0.10.1
-
-### [Open HaloBridge Releases →](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases)
-
-Open the latest release, expand **Assets**, and download **HaloBridge-<version>.zip**. That one ZIP is everything you install in Blender: it contains the add-on and the small helper programs it uses to read Halo files.
-
-GitHub's automatic **Source code** ZIP/TAR downloads are for developers. They do not contain the compiled helpers, so the add-on will not work if you install one of those.
+**Viewport scale:** Halo:MCC Assets uses a 100× scale compared to blenders scale.
 
 ## What you can do
 
-- **Import a whole level from its Editing Kit `.scenario`** (Halo 3, ODST, Halo: CE, Halo 2 and Reach). For Halo 3 and ODST, the level is rebuilt from the kit's own source data: BSP geometry with original instance names, every scenery/crate/machine/control/vehicle placement with its variant, and each surface's real shader name.
+- **Detect folders** finds Editing Kits and MCC in every Steam library and Xbox app / PC Game Pass installs, and storage follows a Documents folder moved by OneDrive.
+**Import level from .scenario (Halo 3).** HaloBridge now reads a level from your extracted H3EK tags instead of reconstructing it from compiled `.map` data. BSP geometry comes from the source files stored in the BSP tags, with original instance names and transforms; every scenery, crate, machine, control and vehicle placement comes from the scenario with its variant; each surface gets its real shader tag and source flags. The matching `.map` only supplies preview textures, looked up by exact shader path.
+- **Original scenery stays scenery.** When you prepare a scenario import for Sapien, unedited scenery is written as placements of its own scenery tag, keeping its collision and physics. Vehicles keep their vehicle tags. Edited objects export as static geometry.
+- **Halo 3: ODST** is a full game: index and import its `.map` files, import levels from the H3ODSTEK `.scenario`, and prepare ODST Sapien levels.
+- **Halo: CE and Halo 2** import from MCC `.map` files, and from their Editing Kit `.scenario` tags (HCEEK / H2EK; the kit's own Tool builds the map first).
+- **Halo: Reach `.scenario` import** places objects from the HREK scenario (geometry comes from the matching `.map`).
+- **Every game asset in one level.** Assets from any import game can be prepared together in a Halo 3 Sapien level; their shaders are converted automatically.
+- **Skies from any game.** **Sapien Sky** has a **Game** choice: use a Halo 3 kit sky, or convert a Halo: CE, Halo 2, ODST or Reach sky into your level.
+- **Index .scenario Assets** and a source filter (All / .map / .scenario) in the asset list.
+- **Blender 5.2 support.** Runs on Blender 4.0 through 5.2. On 4.1 and newer, use the current Halo Asset Blender Development Toolset release.
 - **Import an entire `.map`** from your MCC installation: terrain, instanced geometry, objects and skies at their original positions, with preview textures.
 - **Browse a level's assets** in a searchable, filterable list. Turn on **Preview Mode**, click a row, and the asset appears at your 3D cursor. Click **Place asset(s)** to keep it.
 - **Mix games.** Put a Halo 2 rock, a Reach tree and a Halo 3 bridge in the same level. Materials from other games are converted to Halo 3 bitmaps and shaders automatically when you prepare.
-- **Use a sky from any game.** Pick a game, then a sky. Skies from other games are rebuilt as a Halo 3 sky.
+- **(Experimental)Use a sky from any game.** Pick a game, then a sky. Skies from other games are rebuilt as a Halo 3 sky(Halo CE, Halo 2 have sky texture problems currently that will be fixed).
 - **Greybox with cubes** and swap them for real assets, **paint terrain** with the original layered textures, **recolor** models and vehicles, and choose collision per object.
 - **Prepare for Sapien** with one button. HaloBridge exports your current Blender scene, compiles it with the Editing Kit's Tool, sets the sky, adds a player start, optionally bakes test lighting, and can open the result in Sapien.
 
