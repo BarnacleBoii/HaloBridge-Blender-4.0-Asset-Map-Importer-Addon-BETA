@@ -2,7 +2,7 @@
 
 [Home](../README.md) · [Supported games](GAMES.md) · [Troubleshooting](TROUBLESHOOTING.md) · [Verification history](../TESTING.md)
 
-HaloBridge v0.10.0 is a beta. This page lists what it doesn't do yet, so you know what to expect before you build on it.
+HaloBridge v0.10.1 is a beta. This page lists what it doesn't do yet, so you know what to expect before you build on it.
 
 ## Platform
 

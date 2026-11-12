@@ -20,7 +20,7 @@
 
 - Make sure the add-on is ticked in **Edit → Preferences → Add-ons**. Expand it: an error there names the problem.
 - The tab is in the 3D View's sidebar: hover over the viewport and press **N**.
-- You installed the release ZIP (**HaloBridge-0.10.0.zip**), not GitHub's "Source code" ZIP or the `-source` ZIP.
+- You installed the release ZIP (**HaloBridge-0.10.1.zip**), not GitHub's "Source code" ZIP or the `-source` ZIP.
 - After updating, restart Blender.
 
 ### Detect folders didn't find my folders

@@ -1,4 +1,4 @@
-# Installing and updating HaloBridge v0.10.0
+# Installing and updating HaloBridge v0.10.1
 
 [Home](../README.md) · [Importing](IMPORTING.md) · [First map](FIRST-MAP.md) · [Sidebar reference](FEATURES.md) · [Troubleshooting](TROUBLESHOOTING.md)
 
@@ -28,7 +28,7 @@ This guide takes you from nothing to a working HaloBridge sidebar with its folde
 | [.NET Framework](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net48) | **4.8 or newer** | Runs HaloBridge's Editing Kit helper, which reads and writes tags through the kit's ManagedBlam. Usually already installed with Windows. |
 | [Halo: The Master Chief Collection](https://store.steampowered.com/app/976730/Halo_The_Master_Chief_Collection/) | Steam or Xbox app / PC Game Pass | Its `.map` files supply models, textures and placements for the asset list, whole-map imports and preview textures. |
 | [Halo 3 Mod Tools (H3EK)](https://store.steampowered.com/app/1695791/Halo_3_Mod_Tools__MCC/) | Current Steam version, tag archives extracted | Supplies Tool (the level compiler), Sapien, ManagedBlam and the Halo 3 tags. Required for Sapien preparation and Halo 3 `.scenario` import. |
-| [HaloBridge](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases) | **HaloBridge-0.10.0.zip** | The add-on plus its two helper programs. Do not use the source ZIP. |
+| [HaloBridge](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases) | **HaloBridge-0.10.1.zip** | The add-on plus its two helper programs. Do not use the source ZIP. |
 
 You do **not** need Reclaimer, Foundry, Osoyoos, or a manually exported asset library. HaloBridge includes its own map reader.
 
@@ -89,11 +89,11 @@ If you see `tags\tags\...` or `H3EK\H3EK\...`, an archive was extracted one fold
 
 ## 3. Install HaloBridge
 
-1. Open the [HaloBridge releases page](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases), expand **Assets** under v0.10.0 and download **HaloBridge-0.10.0.zip**. Don't unzip it.
+1. Open the [HaloBridge releases page](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases), expand **Assets** under v0.10.1 and download **HaloBridge-0.10.1.zip**. Don't unzip it.
 2. In Blender, open **Edit → Preferences → Add-ons**.
    - Blender 4.2 and newer: click the **⌄** drop-down at the top right → **Install from Disk…**
    - Blender 4.0 / 4.1: click **Install…**
-3. Select `HaloBridge-0.10.0.zip` and click **Install**.
+3. Select `HaloBridge-0.10.1.zip` and click **Install**.
 4. Tick **HaloBridge - Halo Level Importing** to enable it. Keep the Halo toolset enabled too.
 5. Close Preferences. Hover over the 3D View, press **N**, and click the **HaloBridge** tab on the right edge.
 
