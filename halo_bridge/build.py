@@ -18,6 +18,19 @@ def ensure_sapien_closed():
     if any('"'+name+'"' in r.stdout.lower() for name in ('sapien.exe','sapien_play.exe')):
         raise RuntimeError('Save and close Sapien before preparing the level. This prevents overwriting unsaved editor changes.')
 
+def faux_shader_failure(issues):
+    """True for Tool's test-lighting assertion on a shader it cannot evaluate (faux_material.cpp)."""
+    text='\n'.join(str(i) for i in issues).lower()
+    return 'faux_material.cpp' in text or ('faux' in text and 'parameter_success' in text)
+
+# Shader types whose animated parameters Tool's test lighting cannot evaluate.
+FAUX_RISKY_SUFFIXES=('.shader_custom',)
+
+def lighting_suspects(config):
+    """Original shader tags in this level that Tool's test lighting is known to reject."""
+    return sorted(tag for tag,alias in config.get('shader_aliases',{}).items()
+                  if Path(alias.get('source','')).suffix.lower() in FAUX_RISKY_SUFFIXES)
+
 @contextlib.contextmanager
 def project_transaction(kit, level, cache):
     safe_level(level);kit=Path(kit).resolve();cache=Path(cache)
@@ -159,25 +172,41 @@ def prepare(config, ass_file, placements, cancel=None, progress=None):
             progress('Placing original vehicles (using existing vehicle tags)')
             tag_job('sync_vehicles',placements=config.get('vehicle_placements',[]),previous=after_compile)
         if config.get('spawn_position'):tag_job('ensure_spawn',position=config['spawn_position'])
+        lit=False
         if config.get('lighting',True):
             stage(5,'Generate test lighting and finalize')
             progress('Starting test lighting: 16 tool stages. Each stage can take several minutes.')
             blob=str(100000000+time.time_ns()%900000000);blobdir='faux\\'+blob
-            tool('faux_data_sync',scenario,level)
-            tool('faux_farm_begin',scenario,level,'all','draft',blob)
-            for stage in ('dillum','pcast','radest','extillum','fgather'):
-                tool('faux_farm_'+stage,blobdir,'0','1')
-                tool('faux_farm_'+stage+'_merge',blobdir,'1')
-            tool('faux_farm_finish',blobdir)
-            tool('faux-build-linear-textures-with-intensity-from-quadratic',scenario,level)
-            tool('faux-compress-scenario-bitmaps-dxt5',scenario,level)
-            tool('faux-farm-compression-merge',scenario,level)
-            if sky_object and light_sky:
-                progress('Setting the converted sky (lighting was baked with '+light_sky.rsplit('\\',1)[-1]+')')
-                tag_job('sky_object',template='levels\\multi\\'+level+'\\sky\\sky',radius=float(sky_object.get('radius',0)))
+            try:
+                tool('faux_data_sync',scenario,level)
+                tool('faux_farm_begin',scenario,level,'all','draft',blob)
+                for stage in ('dillum','pcast','radest','extillum','fgather'):
+                    tool('faux_farm_'+stage,blobdir,'0','1')
+                    tool('faux_farm_'+stage+'_merge',blobdir,'1')
+                tool('faux_farm_finish',blobdir)
+                tool('faux-build-linear-textures-with-intensity-from-quadratic',scenario,level)
+                tool('faux-compress-scenario-bitmaps-dxt5',scenario,level)
+                tool('faux-farm-compression-merge',scenario,level)
+                lit=True
+            except ValidationError as error:
+                if not faux_shader_failure(error.issues):raise
+                # Tool's test lighting (faux) asserts on some animated shaders (for example
+                # 070_waste's waterfall.shader_custom). The compiled level is still valid,
+                # so it is kept without test lighting instead of rolling everything back.
+                suspects=lighting_suspects(config)
+                config['lighting_skipped_shaders']=suspects
+                note=('Test lighting was skipped: Halo Tool\'s test lighting cannot process '
+                      +(('the animated shader(s) '+', '.join(suspects)) if suspects else 'one of this level\'s shaders')
+                      +'. The level was prepared without test lighting. To light it, give those objects a different shader or remove them, '
+                      'or turn off Generate Test Lighting. Tool log: '+str(error.stage))
+                config.setdefault('compiler_warnings',[]).append(note)
+                progress(note)
         else:stage(5,'Finalize (test lighting disabled)')
+        if sky_object and light_sky and config.get('lighting',True):
+            progress('Setting the converted sky'+(' (lighting was baked with '+light_sky.rsplit('\\',1)[-1]+')' if lit else ''))
+            tag_job('sky_object',template='levels\\multi\\'+level+'\\sky\\sky',radius=float(sky_object.get('radius',0)))
         final=tag_job('inspect')
-        write_json(manifest,dict(version=1,kit=str(kit.resolve()),scenario=scenario,state=final['state'],placements=placements,completed=time.time(),lighting=bool(config.get('lighting',True)),sky_scenario=sky))
+        write_json(manifest,dict(version=1,kit=str(kit.resolve()),scenario=scenario,state=final['state'],placements=placements,completed=time.time(),lighting=lit,sky_scenario=sky))
     progress('Ready in Sapien')
     return str(target)
 

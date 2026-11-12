@@ -1535,6 +1535,12 @@ class HBPrepare(Guard,bpy.types.Operator):
             global _message,_box_retry
             _box_retry=0
             _message='Ready: '+path;prepare_status('Finished. Level prepared for Sapien.')
+            skipped=set(s.lower() for s in cfg.get('lighting_skipped_shaders',[]))
+            if skipped:
+                users=sorted({o.name for o in geometry_export.objects(context.scene) for m in getattr(o.data,'materials',[]) or []
+                              if m and m.get('hb_shader','').replace('/','\\').lower() in skipped})
+                if users:cfg.setdefault('compiler_warnings',[]).append('Objects using the shader(s) test lighting could not process: '+', '.join(users[:20])+(' ...' if len(users)>20 else ''))
+                _message+='\nTest lighting was skipped; see the preparation report.'
             issues=cfg.get('compiler_warnings',[])
             if issues:
                 _message+='\nPrepared with '+str(len(issues))+' geometry warning(s). Open the preparation report for affected objects.'
