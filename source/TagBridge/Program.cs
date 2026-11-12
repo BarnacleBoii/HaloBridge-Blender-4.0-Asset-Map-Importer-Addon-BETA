@@ -597,6 +597,7 @@ class TagOps {
   result["tag"]=path.RelativePath;result["type"]=path.Extension;result["model"]="";result["render_model"]="";result["collision_model"]="";
   result["sources"]=new List<object>();result["shaders"]=new string[0];result["variants"]=new List<object>();result["regions"]=new List<object>();
   if(!File.Exists(path.Filename)){warnings.Add("Missing object tag: "+path.RelativePathWithExtension);return result;}
+  Console.WriteLine("Reading "+path.RelativePathWithExtension);
   using(var item=new TagFile(path)) {
    result["default_variant"]=FindStringId(item.Fields,"default model variant")??"";
    var modelRef=References(item.Fields).FirstOrDefault(r=>r.FieldName=="model" && r.Path!=null);
@@ -636,6 +637,7 @@ class TagOps {
     row["sources"]=new List<object>();row["shaders"]=new string[0];
     if(!File.Exists(reference.Path.Filename)){warnings.Add("Missing BSP tag: "+reference.Path.RelativePathWithExtension);row["missing"]=true;bsps.Add(row);continue;}
     try {
+     Console.WriteLine("Reading "+reference.Path.RelativePathWithExtension);
      using(var bsp=new TagFile(reference.Path)) {row["sources"]=SourceFiles(bsp,folder,"bsp_"+i);row["shaders"]=ShaderPaths(bsp);}
     } catch(Exception e){warnings.Add("BSP "+reference.Path.RelativePath+": "+e.Message);}
     bsps.Add(row);
