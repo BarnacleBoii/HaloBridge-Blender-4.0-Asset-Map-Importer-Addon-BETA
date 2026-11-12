@@ -10,8 +10,8 @@ using System.Security.Cryptography;
 using Bungie;
 using Bungie.Tags;
 
-class Job { public int version,section; public string operation,kit,scenario,output,template,asset_name; public string[] sources; public float[] position; public ShaderImport[] shaders; public Placement[] placements; public Dictionary<string,string> previous; }
-class ShaderImport { public string path,base_map,normal_map,alpha_map; }
+class Job { public int version,section; public float radius; public string operation,kit,scenario,output,template,asset_name; public string[] sources; public float[] position; public ShaderImport[] shaders; public Placement[] placements; public Dictionary<string,string> previous; }
+class ShaderImport { public string path,base_map,normal_map,alpha_map; public bool sky,additive; }
 class Placement { public Dictionary<string,string> paint; public string id,tag; public float[] position,rotation; public float scale=1; }
 class Program {
  [DllImport("kernel32.dll",CharSet=CharSet.Unicode)] static extern bool SetDllDirectory(string p);
@@ -26,6 +26,8 @@ class Program {
 class TagOps {
  static string kit; static JavaScriptSerializer js=new JavaScriptSerializer {MaxJsonLength=int.MaxValue};
  static T F<T>(TagField[] fields,string name) where T:TagField {return (T)fields.Single(f=>f.FieldName==name);}
+ // Object names are plain strings in Halo 3 and ODST, string IDs in Reach.
+ static string Text(TagField[] fields,string name) {var f=fields.Single(x=>x.FieldName==name);var plain=f as TagFieldElementStringNormal;if(plain!=null)return plain.Data;var id=f as TagFieldElementStringID;return id!=null?id.Data:"";}
  static TagField[] S(TagField[] fields,string name){return F<TagFieldStruct>(fields,name).Elements[0].Fields;}
  static string Hash(TagFieldBlock b,int i){using(var h=SHA256.Create())return Convert.ToBase64String(h.ComputeHash(b.SerializeElement(i)));}
  static string Safe(string p){if(String.IsNullOrWhiteSpace(p)||Path.IsPathRooted(p)||p.Split('\\','/').Any(x=>x==".."))throw new Exception("Invalid relative tag path");return p.Replace('/','\\');}
@@ -33,13 +35,16 @@ class TagOps {
   kit=Path.GetFullPath(j.kit);
   var init=typeof(ManagedBlamSystem).GetMethod("InitializeProject",new[]{typeof(InitializationType),typeof(string)});
   if(init!=null)init.Invoke(null,new object[]{InitializationType.TagsOnly,kit});
-  else if(j.operation=="model_collision"){var start=typeof(ManagedBlamSystem).GetMethods().Single(m=>m.Name=="Start" && m.GetParameters().Length==3);var t=start.GetParameters()[2].ParameterType;var options=Activator.CreateInstance(t);t.GetProperty("InitializationLevel").SetValue(options,InitializationType.TagsOnly,null);t.GetProperty("ForBackgroundServiceProcess").SetValue(options,true,null);start.Invoke(null,new object[]{kit,null,options});}
+  else if(j.operation=="model_collision"||j.operation=="scenario_scene"){var start=typeof(ManagedBlamSystem).GetMethods().Single(m=>m.Name=="Start" && m.GetParameters().Length==3);var t=start.GetParameters()[2].ParameterType;var options=Activator.CreateInstance(t);t.GetProperty("InitializationLevel").SetValue(options,InitializationType.TagsOnly,null);t.GetProperty("ForBackgroundServiceProcess").SetValue(options,true,null);start.Invoke(null,new object[]{kit,null,options});}
   else throw new Exception("Select the Halo 3 Editing Kit for this operation.");
   if(j.operation=="prepare_bitmaps") { PrepareBitmaps(j);return; }
   if(j.operation=="import_shaders") { ImportShaders(j);return; }
   if(j.operation=="list_skies") { ListSkies(j);return; }
+  if(j.operation=="dump_tags") { DumpTags(j);return; }
+  if(j.operation=="sky_object") { SkyObject(j);return; }
   if(j.operation=="recover_source") { RecoverSource(j);return; }
   if(j.operation=="model_collision"){ModelCollision(j);return;}
+  if(j.operation=="scenario_scene"){ScenarioScene(j);return;}
   if(j.operation=="collision") { Collision(j);return; }
   if(j.operation=="inspect_bsp") { InspectBsp(j);return; }
   if(j.operation=="resolve_scenery") { ResolveScenery(j);return; }
@@ -83,7 +88,8 @@ class TagOps {
      if(j.position==null || j.position.Length!=3 || j.position.Any(x=>Single.IsNaN(x)||Single.IsInfinity(x)))throw new Exception("Invalid test spawn position");
      starts.AddElement();var fields=starts.Elements[0].Fields;
      F<TagFieldElementArraySingle>(fields,"position").Data=j.position;
-     F<TagFieldElementInteger>(fields,"bsp index").Data=0;
+     // Halo 3 names the BSP; ODST has an insertion point index instead (0 for both).
+     foreach(var name in new[]{"bsp index","insertion point index"}){var index=fields.FirstOrDefault(f=>f.FieldName==name) as TagFieldElementInteger;if(index!=null)index.Data=0;}
      tag.Save();
     }
    } else if(j.operation=="environment") {
@@ -219,11 +225,12 @@ class TagOps {
   File.WriteAllText(j.output,js.Serialize(new{version=1,ok=true}));
  }
  static void ImportShaders(Job j) {
-  string prefix=Path.GetDirectoryName(Safe(j.scenario))+"\\shaders\\";
+  // Level shaders sit in <level>\shaders, converted sky shaders in <level>\sky\shaders.
+  string level=Path.GetDirectoryName(Safe(j.scenario))+"\\";
   var verified=new List<object>();
   foreach(var item in j.shaders??new ShaderImport[0]) {
    string target=Safe(item.path);
-   if(!target.StartsWith(prefix,StringComparison.OrdinalIgnoreCase))throw new Exception("Generated shader is outside this level.");
+   if(!target.StartsWith(level+"shaders\\",StringComparison.OrdinalIgnoreCase) && !target.StartsWith(level+"sky\\shaders\\",StringComparison.OrdinalIgnoreCase))throw new Exception("Generated shader is outside this level.");
    using(var tag=new TagFile(TagPath.FromPathAndType("shaders\\invalid","rmsh"))) {
     var fields=S(tag.Fields,"render_method");
     var options=F<TagFieldBlock>(fields,"options");
@@ -231,6 +238,11 @@ class TagOps {
     F<TagFieldElementInteger>(options.Elements[1].Fields,"short").Data=String.IsNullOrEmpty(item.normal_map)?0:1;
     F<TagFieldElementInteger>(options.Elements[2].Fields,"short").Data=String.IsNullOrEmpty(item.alpha_map)?0:1;
     F<TagFieldElementInteger>(options.Elements[9].Fields,"short").Data=1;
+    // Converted skies have no sky lighting, so their shaders are unlit (material model
+    // "none") and show their texture as self-illumination ("from_diffuse").
+    if(item.sky){F<TagFieldElementInteger>(options.Elements[1].Fields,"short").Data=0;F<TagFieldElementInteger>(options.Elements[4].Fields,"short").Data=4;F<TagFieldElementInteger>(options.Elements[6].Fields,"short").Data=4;}
+    // blend_mode "additive" (Halo CE / Halo 2 sky layers); alpha test does not apply to it.
+    if(item.sky && item.additive){F<TagFieldElementInteger>(options.Elements[7].Fields,"short").Data=1;F<TagFieldElementInteger>(options.Elements[2].Fields,"short").Data=0;}
     var parameters=F<TagFieldBlock>(fields,"parameters");while(parameters.Elements.Count>0)parameters.RemoveElement(parameters.Elements.Count-1);
     var maps=new Dictionary<string,string>{{"base_map",item.base_map},{"bump_map",item.normal_map},{"alpha_test_map",item.alpha_map}};
     foreach(var pair in maps) {
@@ -397,6 +409,63 @@ class TagOps {
   }
   File.WriteAllText(j.output,js.Serialize(new{version=1,matches=matches,warnings=errors}));
  }
+ // Diagnostic: non-empty field values of tags (sources = "path.extension"), for comparing with Bungie's tags.
+ static void DumpTags(Job j) {
+  var result=new Dictionary<string,List<string>>();
+  foreach(var source in j.sources??new string[0]) {
+   var lines=new List<string>();int bar=source.LastIndexOf('|');
+   using(var tag=new TagFile(TagPath.FromPathAndType(Safe(source.Substring(0,bar)),source.Substring(bar+1))))Dump(tag.Fields,"",lines,0);
+   result[source]=lines;
+  }
+  File.WriteAllText(j.output,js.Serialize(result));
+ }
+ static void Dump(TagField[] fields,string prefix,List<string> lines,int depth) {
+  if(depth>6||lines.Count>4000)return;
+  foreach(var f in fields) {
+   string name=prefix+f.FieldName;
+   var st=f as TagFieldStruct;if(st!=null){foreach(var e in st.Elements)Dump(e.Fields,name+"/",lines,depth+1);continue;}
+   var bl=f as TagFieldBlock;if(bl!=null){if(bl.Elements.Count>0)lines.Add(name+" ["+bl.Elements.Count+"]");for(int i=0;i<Math.Min(bl.Elements.Count,12);i++)Dump(bl.Elements[i].Fields,name+"["+i+"]/",lines,depth+1);continue;}
+   string value=null;
+   var r=f as TagFieldReference;if(r!=null)value=r.Path==null?null:r.Path.RelativePathWithExtension;
+   var en=f as TagFieldEnum;if(en!=null)value=en.Value.ToString();
+   var ei=f as TagFieldElementInteger;if(ei!=null)value=ei.Data.ToString();
+   var es=f as TagFieldElementSingle;if(es!=null)value=es.Data.ToString();
+   var ea=f as TagFieldElementArraySingle;if(ea!=null)value=String.Join(",",ea.Data);
+   var sid=f as TagFieldElementStringID;if(sid!=null)value=sid.Data;
+   var sn=f as TagFieldElementStringNormal;if(sn!=null)value=sn.Data;
+   var bi=f as TagFieldBlockIndex;if(bi!=null)value=bi.Value.ToString();
+   if(!String.IsNullOrEmpty(value)&&value!="0"&&value!="-1"&&value!="0,0,0")lines.Add(name+" = "+value);
+  }
+ }
+ // A sky converted from another game: the render model Tool built with render-sky gets a
+ // model and a scenery tag (as Bungie's skies have), and the scenario's skies use it.
+ static void SkyObject(Job j) {
+  string level=Path.GetDirectoryName(Safe(j.scenario))+"\\";string target=Safe(j.template);
+  if(!target.StartsWith(level,StringComparison.OrdinalIgnoreCase))throw new Exception("The converted sky is outside this level.");
+  if(!File.Exists(Path.Combine(kit,"tags",target+".render_model")))throw new Exception("Tool did not build the sky render model: "+target);
+  using(var model=new TagFile()) {
+   var path=TagPath.FromPathAndType(target,"hlmt");
+   if(File.Exists(Path.Combine(kit,"tags",target+".model")))model.Load(path);else model.New(path);
+   F<TagFieldReference>(model.Fields,"render model").Path=TagPath.FromPathAndType(target,"mode");
+   model.Save();
+  }
+  using(var scenery=new TagFile()) {
+   var path=TagPath.FromPathAndType(target,"scen");
+   if(File.Exists(Path.Combine(kit,"tags",target+".scenery")))scenery.Load(path);else scenery.New(path);
+   var obj=S(scenery.Fields,"object");
+   F<TagFieldReference>(obj,"model").Path=TagPath.FromPathAndType(target,"hlmt");
+   if(j.radius>0)F<TagFieldElementSingle>(obj,"bounding radius").Data=j.radius;
+   scenery.Save();
+  }
+  using(var tag=new TagFile(TagPath.FromPathAndType(Safe(j.scenario),"scnr*"))) {
+   var skies=F<TagFieldBlock>(tag.Fields,"skies");
+   if(skies.Elements.Count==0)skies.AddElement();
+   // Keep existing slots so every BSP's sky index stays valid.
+   foreach(var element in skies.Elements)F<TagFieldReference>(element.Fields,"sky").Path=TagPath.FromPathAndType(target,"scen");
+   tag.Save();
+  }
+  File.WriteAllText(j.output,js.Serialize(new{version=1,ok=true,sky=target+".scenery"}));
+ }
  static void ListSkies(Job j) {
   var items=new List<object>();var warnings=new List<string>();string root=Path.Combine(kit,"tags");
   foreach(var file in Directory.EnumerateFiles(Path.Combine(root,"levels"),"*.scenario",SearchOption.AllDirectories).OrderBy(x=>x)) {
@@ -451,11 +520,13 @@ class TagOps {
  }
  static void ModelCollision(Job j) {
   string source=Safe(j.scenario);
+  // Scenario imports name the model tag directly; its render model may live elsewhere.
+  string expectedRender=String.IsNullOrEmpty(j.template)?source:Safe(j.template);
   using(var model=new TagFile(TagPath.FromPathAndType(source,"hlmt*"))) {
    var refs=References(model.Fields).ToArray();
    var render=refs.Single(x=>x.FieldName=="render model").Path;
    var coll=refs.Single(x=>x.FieldName=="collision model").Path;
-   if(render==null || !render.RelativePath.Equals(source,StringComparison.OrdinalIgnoreCase) || coll==null)throw new Exception("No matching collision reference for "+source);
+   if(render==null || !render.RelativePath.Equals(expectedRender,StringComparison.OrdinalIgnoreCase) || coll==null)throw new Exception("No matching collision reference for "+source);
    using(var geom=new TagFile(render))
    using(var tag=new TagFile(coll)){
     var nodes=F<TagFieldBlock>(geom.Fields,"nodes").Elements.Cast<TagElement>().ToDictionary(n=>F<TagFieldElementStringID>(n.Fields,"name").Data);
@@ -472,6 +543,133 @@ class TagOps {
     File.WriteAllText(j.output,js.Serialize(new{source=source,collision=coll.RelativePath,skeleton=skeleton,meshes=meshes}));
    }
   }
+ }
+ // ---- Editing Kit scenario import -------------------------------------
+ // Reads the level directly from its .scenario tag: BSP and render-model
+ // authoring sources (tag import info), object palettes and placements.
+ // Nothing is written to the kit; blobs go to the job's own output folder.
+ static TagFieldBlock Block(TagField[] fields,string name){return fields.OfType<TagFieldBlock>().FirstOrDefault(b=>b.FieldName==name);}
+ static string FindStringId(TagField[] fields,string name) {
+  foreach(var field in fields) {
+   var value=field as TagFieldElementStringID;
+   if(value!=null && value.FieldName==name)return value.Data;
+   var structure=field as TagFieldStruct;
+   if(structure!=null)foreach(var e in structure.Elements){string found=FindStringId(e.Fields,name);if(found!=null)return found;}
+  }
+  return null;
+ }
+ static List<object> NameTree(TagFieldBlock block,int depth) {
+  var items=new List<object>();
+  if(block==null || depth>3)return items;
+  foreach(var e in block.Elements) {
+   string name=e.Fields.OfType<TagFieldElementStringID>().Select(s=>s.Data).FirstOrDefault();
+   var children=new Dictionary<string,object>();
+   foreach(var child in e.Fields.OfType<TagFieldBlock>())children[child.FieldName]=NameTree(child,depth+1);
+   items.Add(new{name=name??"",blocks=children});
+  }
+  return items;
+ }
+ static string[] ShaderPaths(TagFile tag) {
+  // Walk only the material blocks: large BSPs have hundreds of thousands of collision elements.
+  var blocks=new[]{"materials","collision materials"}.Select(n=>Block(tag.Fields,n)).Where(b=>b!=null).ToArray();
+  var fields=blocks.Length>0?blocks.SelectMany(b=>b.Elements.Cast<TagElement>()).SelectMany(e=>e.Fields).ToArray():tag.Fields;
+  return AllReferences(fields).Where(r=>r.Path!=null && r.Path.Extension.StartsWith("shader",StringComparison.OrdinalIgnoreCase)).Select(r=>r.Path.RelativePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+ }
+ static List<object> SourceFiles(TagFile tag,string folder,string prefix) {
+  var items=new List<object>();
+  var stream=TagAlternateStreamType.TagImportInformation;
+  if(!tag.DoesAlternateStreamExist(stream))return items;
+  var files=F<TagFieldBlock>(((TagElement)tag.GetAlternateStream(stream)).Fields,"files");
+  for(int i=0;i<files.Elements.Count;i++) {
+   var f=files.Elements[i].Fields;string name=F<TagFieldElementLongString>(f,"path").Data??"";
+   string lower=name.ToLowerInvariant();
+   if(!lower.EndsWith(".ass") && !lower.EndsWith(".jms"))continue;
+   byte[] zipped=F<TagFieldData>(f,"zipped data").GetData();
+   string compressed=prefix+"-"+i+".zlib";
+   // Never use embedded source names as output paths.
+   using(var output=new FileStream(Path.Combine(folder,compressed),FileMode.CreateNew,FileAccess.Write))output.Write(zipped,0,zipped.Length);
+   items.Add(new{source_path=name,compressed=compressed,size=I(f,"size"),crc32=unchecked((uint)I(f,"checksum"))});
+  }
+  return items;
+ }
+ static Dictionary<string,object> ReadObject(TagPath path,string folder,string prefix,List<string> warnings) {
+  var result=new Dictionary<string,object>();
+  result["tag"]=path.RelativePath;result["type"]=path.Extension;result["model"]="";result["render_model"]="";result["collision_model"]="";
+  result["sources"]=new List<object>();result["shaders"]=new string[0];result["variants"]=new List<object>();result["regions"]=new List<object>();
+  if(!File.Exists(path.Filename)){warnings.Add("Missing object tag: "+path.RelativePathWithExtension);return result;}
+  using(var item=new TagFile(path)) {
+   result["default_variant"]=FindStringId(item.Fields,"default model variant")??"";
+   var modelRef=References(item.Fields).FirstOrDefault(r=>r.FieldName=="model" && r.Path!=null);
+   if(modelRef==null)return result;
+   result["model"]=modelRef.Path.RelativePath;
+   if(!File.Exists(modelRef.Path.Filename)){warnings.Add("Missing model tag: "+modelRef.Path.RelativePathWithExtension);return result;}
+   using(var model=new TagFile(modelRef.Path)) {
+    var refs=References(model.Fields).ToArray();
+    var render=refs.FirstOrDefault(r=>r.FieldName=="render model" && r.Path!=null);
+    var collision=refs.FirstOrDefault(r=>r.FieldName=="collision model" && r.Path!=null);
+    if(collision!=null)result["collision_model"]=collision.Path.RelativePath;
+    result["variants"]=NameTree(Block(model.Fields,"variants"),0);
+    if(render==null)return result;
+    result["render_model"]=render.Path.RelativePath;
+    if(!File.Exists(render.Path.Filename)){warnings.Add("Missing render model tag: "+render.Path.RelativePathWithExtension);return result;}
+    using(var mode=new TagFile(render.Path)) {
+     result["sources"]=SourceFiles(mode,folder,prefix);
+     result["shaders"]=ShaderPaths(mode);
+     result["regions"]=NameTree(Block(mode.Fields,"regions"),0);
+    }
+   }
+  }
+  return result;
+ }
+ static void ScenarioScene(Job j) {
+  string scenario=Safe(j.scenario);string folder=Path.GetDirectoryName(Path.GetFullPath(j.output));
+  Directory.CreateDirectory(folder);
+  var warnings=new List<string>();var bsps=new List<object>();var objects=new Dictionary<string,object>();
+  var placements=new List<object>();var skies=new List<string>();var counts=new Dictionary<string,int>();
+  using(var tag=new TagFile(TagPath.FromPathAndType(scenario,"scnr*"))) {
+   var structure=Block(tag.Fields,"structure bsps");
+   if(structure==null)throw new Exception("This scenario has no structure BSP block.");
+   for(int i=0;i<structure.Elements.Count;i++) {
+    var reference=References(structure.Elements[i].Fields).FirstOrDefault(r=>r.FieldName=="structure bsp" && r.Path!=null);
+    if(reference==null){warnings.Add("BSP slot "+i+" has no structure BSP reference.");continue;}
+    var row=new Dictionary<string,object>();row["index"]=i;row["tag"]=reference.Path.RelativePath;
+    row["sources"]=new List<object>();row["shaders"]=new string[0];
+    if(!File.Exists(reference.Path.Filename)){warnings.Add("Missing BSP tag: "+reference.Path.RelativePathWithExtension);row["missing"]=true;bsps.Add(row);continue;}
+    try {
+     using(var bsp=new TagFile(reference.Path)) {row["sources"]=SourceFiles(bsp,folder,"bsp_"+i);row["shaders"]=ShaderPaths(bsp);}
+    } catch(Exception e){warnings.Add("BSP "+reference.Path.RelativePath+": "+e.Message);}
+    bsps.Add(row);
+   }
+   var names=Block(tag.Fields,"object names");
+   var specs=new[]{new[]{"scenery","scenery palette","Scenery"},new[]{"crates","crate palette","Crates"},new[]{"machines","machine palette","Machines"},new[]{"controls","control palette","Controls"},new[]{"vehicles","vehicle palette","Vehicles"},new[]{"weapons","weapon palette","Weapons"},new[]{"equipment","equipment palette","Equipment"}};
+   foreach(var spec in specs) {
+    var block=Block(tag.Fields,spec[0]);var palette=Block(tag.Fields,spec[1]);
+    if(block==null || palette==null)continue;
+    counts[spec[2]]=block.Elements.Count;
+    for(int i=0;i<block.Elements.Count;i++) {
+     try {
+      var f=block.Elements[i].Fields;
+      int pi=F<TagFieldBlockIndex>(f,"type").Value;
+      if(pi<0 || pi>=palette.Elements.Count){warnings.Add(spec[2]+" placement "+i+": no palette entry.");continue;}
+      var reference=F<TagFieldReference>(palette.Elements[pi].Fields,"name").Path;
+      if(reference==null){warnings.Add(spec[2]+" placement "+i+": empty palette entry.");continue;}
+      string key=reference.RelativePathWithExtension;
+      if(!objects.ContainsKey(key))objects[key]=ReadObject(reference,folder,"object_"+objects.Count,warnings);
+      int ni=F<TagFieldBlockIndex>(f,"name").Value;
+      string objectName=names!=null && ni>=0 && ni<names.Elements.Count?Text(names.Elements[ni].Fields,"name"):"";
+      var data=S(f,"object data");
+      placements.Add(new{category=spec[2],index=i,name=objectName,object_tag=key,variant=FindStringId(f,"variant name")??"",position=F<TagFieldElementArraySingle>(data,"position").Data,rotation=F<TagFieldElementArraySingle>(data,"rotation").Data,scale=F<TagFieldElementSingle>(data,"scale").Data});
+     } catch(Exception e){warnings.Add(spec[2]+" placement "+i+": "+e.Message);}
+    }
+   }
+   var skyBlock=Block(tag.Fields,"skies");
+   if(skyBlock!=null)foreach(var e in skyBlock.Elements)foreach(var reference in AllReferences(e.Fields).Where(r=>r.Path!=null)) {
+    string key=reference.Path.RelativePathWithExtension;
+    try {if(!objects.ContainsKey(key))objects[key]=ReadObject(reference.Path,folder,"object_"+objects.Count,warnings);skies.Add(key);}
+    catch(Exception error){warnings.Add("Sky "+key+": "+error.Message);}
+   }
+  }
+  File.WriteAllText(j.output,js.Serialize(new{version=1,kind="halo3_scenario_tags",scenario=scenario,bsps=bsps,objects=objects,placements=placements,skies=skies,counts=counts,warnings=warnings}));
  }
  static void Collision(Job j) {
   using(var tag=new TagFile(TagPath.FromPathAndType(Safe(j.scenario),"sbsp*"))) {
