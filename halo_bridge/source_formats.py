@@ -382,6 +382,12 @@ def parse_jms(text, label='JMS', default_permutation='default'):
                 positions=positions, normals=normals, uvs=uvs, triangles=triangles)
 
 
+def unassigned_triangles(jms):
+    """Number of triangles whose material index is -1 or out of range."""
+    count = len(jms['materials'])
+    return sum(1 for t in jms['triangles'] if not 0 <= t[0] < count)
+
+
 def select_render_triangles(jms, wanted):
     """Keep one LOD and the chosen permutation for each region.
 
@@ -413,8 +419,10 @@ def select_render_triangles(jms, wanted):
     keep = []
     for triangle in jms['triangles']:
         index = triangle[0]
+        # Faces without a material (-1) were never assigned a shader in the source
+        # scene; they cannot render in game, so they are left out (see unassigned_triangles).
         if not 0 <= index < len(jms['materials']):
-            raise SourceError('JMS triangle uses a missing material.')
+            continue
         material = jms['materials'][index]
         if material['lod'] and material['lod'] != best.get((material['region'], material['permutation'])):
             continue

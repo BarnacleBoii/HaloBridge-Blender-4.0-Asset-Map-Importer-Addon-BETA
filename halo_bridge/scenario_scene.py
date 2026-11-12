@@ -25,7 +25,9 @@ KIND = 'halo3_scenario_scene'
 # 3: ASS line strings, "blur)!=" / "'name" material names, collection-folder preference.
 # 4: game field (Halo 3, ODST, Reach); BSPs without kit sources borrow the map geometry.
 # Cached scenes from earlier versions are rebuilt.
-VERSION = 4
+# 5: faces without a material are skipped individually instead of failing the import
+# or dropping their whole BSP object.
+VERSION = 5
 # Placement categories built into Blender, and how each one exports.
 EXPORT = {'Scenery': 'scenery', 'Vehicles': 'vehicle', 'Crates': 'static',
           'Machines': 'static', 'Controls': 'static'}
@@ -234,16 +236,19 @@ def build(config, scenario, data, folder, progress=None, cancel=None):
             ids = [materials.get(m['name'], bsp.get('shaders', []), m['lighting'], bsp['tag']) for m in ass['materials']]
             special_ids = {i for i in ids if materials.special(i)}
             built = {}
+            unassigned = 0
             for index, item in enumerate(ass['objects']):
                 check()
                 if item['kind'] != 'MESH' or not item['triangles']:
                     continue
-                if any(not 0 <= t[0] < len(ids) for t in item['triangles']):
-                    unassigned = all(t[0] == -1 for t in item['triangles'])
-                    warnings.append('BSP ' + bsp['tag'] + ': source object ' + str(index) + (' has no material assigned in the original source file' if unassigned else ' uses a missing material') + ' and was skipped.')
+                # Faces without a material (-1) were never assigned a shader in the
+                # source scene; only those faces are left out, not the whole object.
+                valid = [t for t in item['triangles'] if 0 <= t[0] < len(ids)]
+                unassigned += len(item['triangles']) - len(valid)
+                if not valid:
                     continue
-                parts = (('geometry', [t for t in item['triangles'] if ids[t[0]] not in special_ids]),
-                         ('special', [t for t in item['triangles'] if ids[t[0]] in special_ids]))
+                parts = (('geometry', [t for t in valid if ids[t[0]] not in special_ids]),
+                         ('special', [t for t in valid if ids[t[0]] in special_ids]))
                 for kind, triangles in parts:
                     if not triangles:
                         continue
@@ -259,6 +264,8 @@ def build(config, scenario, data, folder, progress=None, cancel=None):
                         built.setdefault(index, {})[kind] = key
                     if dropped:
                         warnings.append(bsp['tag'] + ': skipped ' + str(dropped) + ' degenerate source triangle(s).')
+            if unassigned:
+                warnings.append('BSP ' + bsp['tag'] + ': ' + str(unassigned) + ' face(s) have no material in the original source file and were skipped.')
             for instance, matrix in zip(ass['instances'], matrices):
                 for kind, key in built.get(instance['object'], {}).items():
                     group = 'Special surfaces' if kind == 'special' else ('BSP instances' if instance['name'].startswith('%') else 'Structure')
@@ -302,6 +309,9 @@ def build(config, scenario, data, folder, progress=None, cancel=None):
             for path, jms in parsed[key]:
                 ids = [materials.get(m['name'], info.get('shaders', []), (), render) for m in jms['materials']]
                 triangles, report = sf.select_render_triangles(jms, wanted)
+                unassigned = sf.unassigned_triangles(jms)
+                if unassigned:
+                    warnings.append(render + ': ' + str(unassigned) + ' face(s) in ' + leaf(path) + ' have no material in the source file and were skipped.')
                 selection.extend(report)
                 record, dropped = sf.mesh_record(jms['positions'], jms['normals'], jms['uvs'], triangles, ids)
                 records.append(record)
@@ -516,6 +526,10 @@ def extract(config, scenario, cancel=None, progress=None):
         except Exception as error:
             if 'Unknown operation' in str(error):
                 raise RuntimeError('The installed tag helper is older than this add-on. Rebuild the helpers with source\\Build.ps1 (see CONTRIBUTING.md) or install a release ZIP that includes them.') from error
+            details = str(error) + ' ' + ' '.join(str(i) for i in getattr(error, 'issues', []))
+            if 'TagLoadException' in details and leaf(scenario).lower() + '.scenario could not be loaded' in details.lower():
+                raise RuntimeError('The Editing Kit could not open ' + scenario + '.scenario. Its tags may be unfinished or damaged '
+                                   'or saved by a different kit version. Try opening it in Sapien to check, or choose another scenario.') from error
             raise
         data = read_json(folder / 'tags.json')
         if not data or data.get('kind') != 'halo3_scenario_tags':
