@@ -9,7 +9,7 @@
 - **Setup:** [HaloBridge tab missing](#the-halobridge-tab-doesnt-appear) · [Detect folders found nothing](#detect-folders-didnt-find-my-folders) · [Check setup complaints](#check-setup-reports-problems) · [Helper or runtime errors](#a-helper-wont-start)
 - **Importing:** [Empty asset list](#the-asset-list-is-empty) · [Map picker empty](#the-map-picker-is-empty-or-a-map-isnt-found) · [Slow imports](#importing-or-previewing-is-slow) · [Missing textures](#textures-are-missing-white-or-flat) · [Missing BSPs](#missing-bsps-or-objects-after-a-whole-level-import) · [.scenario import problems](#scenario-import-problems)
 - **Editing:** [Copies move together](#moving-one-object-moves-others) · [Swap changes size](#swapped-assets-have-a-different-size) · [Flickering / grey view](#flickering-surfaces-or-a-grey-cut-off-view)
-- **Preparing:** [Level name rejected](#output-level-name-is-rejected) · [Prepare fails](#prepare-fails) · [Seems stuck](#preparation-seems-stuck) · [Geometry limits](#cluster--too-many-vertices-triangles-or-strip-segments) · [Collision errors](#collision-errors-and-red-debug-geometry) · [Ownership conflict](#old-output-or-ownership-conflict)
+- **Preparing:** [Level name rejected](#output-level-name-is-rejected) · [Prepare fails](#prepare-fails) · [Test lighting assertion](#test-lighting-fails-faux_materialcpp-parameter_success) · [Seems stuck](#preparation-seems-stuck) · [Geometry limits](#cluster--too-many-vertices-triangles-or-strip-segments) · [Collision errors](#collision-errors-and-red-debug-geometry) · [Ownership conflict](#old-output-or-ownership-conflict)
 - **Sky:** [Wrong or white sky](#wrong-white-or-dark-sky)
 - **In Sapien:** [Player start underground](#the-camera-or-player-start-is-underground)
 - [Reporting a bug](#reporting-a-bug)
@@ -132,6 +132,12 @@ The longest stage is usually geometry and collision. A compiler line like `creat
 - **Red trees or "overlapping surfaces" labels in Sapien** — these are Tool's debug markers, not a visible asset. They point at overlapping or duplicate faces. The report lists them by object name.
 - **Leaves you can't walk through** — Automatic makes Halo foliage shaders walk-through. For other leaf materials, tick the Halo toolset's **Render Only** flag in Material Properties (not on trunks or ground you want to stand on).
 - **Plane builder unable to converge / open edges** — the mesh has holes, duplicate faces or self-intersections. Clean it up, or set its **Object collision** to **Simple box**.
+
+### Test lighting fails: faux_material.cpp parameter_success
+
+This comes from Halo Tool's **test lighting** step (`faux_data_sync`), not from your geometry. Tool's test lighting can't evaluate some animated shaders, for example the waterfall in 070_waste's sky (`levels\solo\070_waste\sky\waterfall\shaders\waterfall.shader_custom`).
+
+From v0.10.1, HaloBridge finishes the level without test lighting when this happens and names the shader and the objects using it in the preparation report. To get lighting back, give those objects a different shader (see **Shaders**), delete them, or turn off **Generate Test Lighting** for quick tests. If you downloaded 0.10.1 before this fix was added, the whole build stops instead: download the release ZIP again, or turn off **Generate Test Lighting**.
 
 ### Old output or ownership conflict
 
