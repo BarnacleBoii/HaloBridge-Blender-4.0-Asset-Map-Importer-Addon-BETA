@@ -6,7 +6,7 @@ Made for Halo 3 Map Creators who wanna get going quickly and start placing/editi
 
 HaloBridge is a Blender add-on that brings Halo levels and assets from **Halo: CE, Halo 2, Halo 3, Halo 3: ODST and Halo: Reach** into Blender, fully textured, and then turns your Blender scene into a **Halo 3 (or ODST) Sapien test level** with one button. You can import a whole level from its Editing Kit `.scenario`, import an entire MCC `.map`, or browse a searchable list of every model, piece of scenery and material in a map and place exactly the ones you want. Assets from different games can be mixed in the same level, and a sky from any of these games can become your level's sky.
 
-The Main reason for this mod tool was to make map making faster, eliminate *time-wasting procedures like having to constantly search and type out every file path* This Tool places everything in *clickable-dropdown-menus. *With HaloBridge After you click [Detect Folders], you don't need to go in and type out every single asset/material file path.
+The Main reason for this mod tool was to make map making faster, eliminate **time-wasting procedures like having to constantly search and type out every file path** This Tool places everything in *clickable-dropdown-menus. *With HaloBridge After you click [Detect Folders], you don't need to go in and type out every single asset/material file path.
 (Coded with Claude Ai, guided by user input)
 **Viewport scale:** Halo:MCC Assets uses a 100× scale compared to blenders scale.
 
