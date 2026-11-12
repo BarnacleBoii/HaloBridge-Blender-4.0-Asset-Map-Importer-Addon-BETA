@@ -267,6 +267,11 @@ class SourceFormatTests(unittest.TestCase):
         self.assertEqual(report[0]['selected'], ['default'])
         damaged, _ = sf.select_render_triangles(jms, {'BASE': 'Damaged'})
         self.assertEqual([t[0] for t in damaged], [1])
+        # Faces with no material (-1), as in 070_waste's sky source, are skipped, not fatal.
+        unassigned = dict(jms, triangles=jms['triangles'] + [(-1, 0, 1, 2), (99, 0, 1, 2)])
+        self.assertEqual(sf.unassigned_triangles(unassigned), 2)
+        kept, _ = sf.select_render_triangles(unassigned, {})
+        self.assertEqual([t[0] for t in kept], [0, 3])
 
     def test_jms_unquoted_names_with_spaces(self):
         # Tool writes JMS strings as whole unquoted lines; names and definitions contain spaces.
