@@ -8,7 +8,7 @@ HaloBridge is a Blender add-on that brings Halo levels and assets from **Halo: C
 
 The Main reason for this mod tool was to eliminate *time-wasting procedures like having to constantly search and type out every file path* This Tool places everything in *clickable-dropdown-menus. *With HaloBridge After you click [Detect Folders], you don't need to go in and type out every single asset/material file path.
 
-(Coded with Chat GPT 6 Astra, guided by user input)
+(Coded with Claude Ai, guided by user input)
 
 **v0.10.1 · Beta preview · Windows x64 · Blender 4.0 to 5.2**
 
