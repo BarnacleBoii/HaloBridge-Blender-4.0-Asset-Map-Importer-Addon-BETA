@@ -1,15 +1,22 @@
-# HaloBridge v0.10.0 — Editing Kit scenario import and Blender 5.2
+# HaloBridge v0.10.1 — scenario import fix
 
 Import levels and assets from Halo: CE, Halo 2, Halo 3, Halo 3: ODST and Halo: Reach in Blender 4.0 to 5.2, straight from Editing Kit `.scenario` tags or MCC `.map` files, and prepare a Halo 3 or ODST Sapien test level that mixes assets (and skies) from all of them.
 
 ## Downloads
 
-- **HaloBridge-0.10.0.zip** is the Blender installer, including compiled helpers.
-- **HaloBridge-0.10.0-source.zip** contains the matching source for developers.
+- **HaloBridge-0.10.1.zip** is the Blender installer, including compiled helpers.
+- **HaloBridge-0.10.1-source.zip** contains the matching source for developers.
 
 Expand Assets below to download the installer. GitHub's automatic source archives omit compiled helpers.
 
-## What's new
+## Fixed in 0.10.1
+
+- **`.scenario` imports no longer stop with "JMS triangle uses a missing material".** Some original source files contain faces that were never given a material (070_waste's cinematic sky has 1,498 of them). These faces are now skipped and listed in the import report, and the rest of the level imports. 070_waste now imports with 13/13 BSPs, 4,609 placements and all 5 skies.
+- **BSP pieces are no longer dropped for a few unassigned faces.** Only those faces are left out, so geometry missing from earlier imports comes back. Cached scenario imports rebuild once.
+
+Updating from 0.10.0: remove the old add-on, restart Blender, then install the new ZIP.
+
+## What's new in 0.10
 
 - **Import level from .scenario (Halo 3).** HaloBridge now reads a level from your extracted H3EK tags instead of reconstructing it from compiled `.map` data. BSP geometry comes from the source files stored in the BSP tags, with original instance names and transforms; every scenery, crate, machine, control and vehicle placement comes from the scenario with its variant; each surface gets its real shader tag and source flags. The matching `.map` only supplies preview textures, looked up by exact shader path.
 - **Original scenery stays scenery.** When you prepare a scenario import for Sapien, unedited scenery is written as placements of its own scenery tag, keeping its collision and physics. Vehicles keep their vehicle tags. Edited objects export as static geometry.
@@ -42,7 +49,7 @@ See the [changelog](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset
 
 1. Install Blender and the runtimes above.
 2. Install and enable the **Halo Asset Blender Development Toolset** (v432 or newer; v364 also works on Blender 4.0).
-3. Download **HaloBridge-0.10.0.zip** from this release's Assets.
+3. Download **HaloBridge-0.10.1.zip** from this release's Assets.
 4. In Blender, open **Edit → Preferences → Add-ons**, use the drop-down at the top right → **Install from Disk…** (on 4.0/4.1: **Install**), select the ZIP without extracting it, and enable **HaloBridge - Halo Level Importing**.
 5. In the 3D View, press **N** and open **HaloBridge**.
 6. Choose an **Import game**, then use **Folders and Setup → Detect folders** (it finds Steam libraries on any drive and Xbox app / Game Pass installs) or enter the Editing Kit and maps paths, then run **Check setup**.

@@ -10,7 +10,7 @@ The Main reason for this mod tool was to eliminate *time-wasting procedures like
 
 (Coded with Chat GPT 6 Astra, guided by user input)
 
-**v0.10.0 · Beta preview · Windows x64 · Blender 4.0 to 5.2**
+**v0.10.1 · Beta preview · Windows x64 · Blender 4.0 to 5.2**
 
 **Viewport scale:** Halo:MCC Assets uses a 100× scale compared to blenders scale. For large scenes, adjust Clip Start and End to the area you are editing. An extreme near/far range can worsen depth flickering. See [viewport troubleshooting](docs/TROUBLESHOOTING.md#flickering-surfaces-or-a-grey-cut-off-view).
 
@@ -18,7 +18,7 @@ The Main reason for this mod tool was to eliminate *time-wasting procedures like
 
 ## Releases and Downloads
 
-Latest Version: v0.10.0
+Latest Version: v0.10.1
 
 ### [Open HaloBridge Releases →](https://github.com/BarnacleBoii/HaloBridge-Blender-4.0-Asset-Map-Importer-Addon-BETA/releases)
 
@@ -64,6 +64,10 @@ No game maps, models, textures, tags or Editing Kit files are included with Halo
    - **Individual assets:** click **Index .map Assets** (or **Index .scenario Assets**), then use the **Indexed Asset List** to search, preview and place.
 6. Switch the viewport to **Material Preview** to see textures.
 7. When you have built something, follow the [first map tutorial](docs/FIRST-MAP.md) to test it in Sapien.
+
+## New in v0.10.1
+
+- **Fixed: `.scenario` imports stopping with "JMS triangle uses a missing material"** (for example the campaign level 070_waste). Faces that have no material in the original source files are now skipped and listed in the import report, and the rest of the level imports. BSP pieces that older versions dropped completely because of a few such faces now import too.
 
 ## New in v0.10.0
 

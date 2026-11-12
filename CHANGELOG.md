@@ -1,3 +1,8 @@
+## 0.10.1 — scenario import fix
+
+- **Fixed: "JMS triangle uses a missing material" stopped `.scenario` imports** (for example `levels\solo\070_waste\070_waste`, whose cinematic sky has 1,498 faces with no material). Faces that have no material in the original source file are now skipped and listed in the import report; the rest of the level imports. Tested with 070_waste: 13/13 BSPs, 4,609 placements, all 5 skies.
+- **Fixed: BSP pieces dropped for one unassigned face.** A BSP source object with a few faces without a material was skipped entirely; now only those faces are left out, so geometry missing from earlier imports (about 20 pieces in 070_waste) comes back. Cached scenario imports are rebuilt once.
+
 ## 0.10.0 — Editing Kit scenario import and Blender 5.2
 
 - **Import level from .scenario.** New Halo 3 route that reads a level from its Editing Kit `.scenario` tag with ManagedBlam: BSP geometry from the ASS source stored in each BSP tag, instance names and transforms, all scenery/crate/machine/control/vehicle placements with variants, weapons/equipment for reference, skies, and the exact shader tag of every surface with its source flags. The matching `.map` is used only for preview textures (looked up by shader path) and as a reported fallback for render models without embedded source.
