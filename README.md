@@ -15,15 +15,15 @@ The Main reason for this mod tool was to make map making faster, eliminate *time
 - **Detect folders** finds Editing Kits and MCC in every Steam library and Xbox app / PC Game Pass installs, and storage follows a Documents folder moved by OneDrive.
 **Import level from .scenario (Halo 3).** HaloBridge now reads a level from your extracted H3EK tags instead of reconstructing it from compiled `.map` data. BSP geometry comes from the source files stored in the BSP tags, with original instance names and transforms; every scenery, crate, machine, control and vehicle placement comes from the scenario with its variant; each surface gets its real shader tag and source flags. The matching `.map` only supplies preview textures, looked up by exact shader path.
 - **Original scenery stays scenery.** When you prepare a scenario import for Sapien, unedited scenery is written as placements of its own scenery tag, keeping its collision and physics. Vehicles keep their vehicle tags. Edited objects export as static geometry.
-- **Halo 3: ODST** is a full game: index and import its `.map` files, import levels from the H3ODSTEK `.scenario`, and prepare ODST Sapien levels.
-- **Halo: CE and Halo 2** import from MCC `.map` files, and from their Editing Kit `.scenario` tags (HCEEK / H2EK; the kit's own Tool builds the map first).
-- **Halo: Reach `.scenario` import** places objects from the HREK scenario (geometry comes from the matching `.map`).
-- **Every game asset in one level.** Assets from any import game can be prepared together in a Halo 3 Sapien level; their shaders are converted automatically.
+- **Halo 3, ODST, Halo Reach** import/index assets/maps/materials as .scenario(recommended) or .map into blender.
+- **Halo: CE and Halo 2** import/index assets/maps/materials as .scenario(recommended) or .map(some Sky Textures still bugged).
+- **Every game asset in one level.** Assets from any import game can be prepared together in a **Halo 3** Sapien level; their shaders are converted automatically.
 - **Skies from any game.** **Sapien Sky** has a **Game** choice: use a Halo 3 kit sky, or convert a Halo: CE, Halo 2, ODST or Reach sky into your level.
-- **Index .scenario Assets** and a source filter (All / .map / .scenario) in the asset list.
+- **Index .scenario/.map Assets** *Indexing* will list every asset/material in the Index List for you to browse, select and place.
 - **Blender 5.2 support.** Runs on Blender 4.0 through 5.2. On 4.1 and newer, use the current Halo Asset Blender Development Toolset release.
 - **Import an entire `.map`** from your MCC installation: terrain, instanced geometry, objects and skies at their original positions, with preview textures.
-- **Browse a level's assets** in a searchable, filterable list. Turn on **Preview Mode**, click a row, and the asset appears at your 3D cursor. Click **Place asset(s)** to keep it.
+- **Browse a level's assets** in a searchable, filterable list.
+- **Preview Mode** select from the index list and the asset spawns at your 3D cursor. Click **Place asset(s)** to keep it.
 - **Mix games.** Put a Halo 2 rock, a Reach tree and a Halo 3 bridge in the same level. Materials from other games are converted to Halo 3 bitmaps and shaders automatically when you prepare.
 - **(Experimental)Use a sky from any game.** Pick a game, then a sky. Skies from other games are rebuilt as a Halo 3 sky(Halo CE, Halo 2 have sky texture problems currently that will be fixed).
 - **Greybox with cubes** and swap them for real assets, **paint terrain** with the original layered textures, **recolor** models and vehicles, and choose collision per object.
